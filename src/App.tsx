@@ -6,6 +6,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 
 import CanvasStage, { requestZoom } from "./components/CanvasStage";
 import ColorPanel from "./components/ColorPanel";
+import FiltersModal from "./components/FiltersModal";
 import Icon from "./components/Icon";
 import LayersPanel from "./components/LayersPanel";
 import NewDocModal from "./components/NewDocModal";
@@ -31,6 +32,7 @@ export default function App() {
 
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   /** Ação que descarta o doc atual passa por aqui: pergunta se houver sujeira. */
   const guardUnsaved = async (): Promise<boolean> => {
@@ -194,6 +196,9 @@ export default function App() {
           <button disabled={!open} onClick={() => setExportOpen(true)}>
             <Icon name="export" /> {t("top.export")}
           </button>
+          <button disabled={!open} onClick={() => setFiltersOpen(true)}>
+            <Icon name="sliders" /> {t("top.filters")}
+          </button>
         </div>
 
         <div className="topbar-group">
@@ -253,6 +258,7 @@ export default function App() {
       </div>
 
       <NewDocModal open={newOpen} onClose={() => setNewOpen(false)} />
+      <FiltersModal open={filtersOpen} onClose={() => setFiltersOpen(false)} />
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => setExportOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

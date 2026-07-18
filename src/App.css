@@ -553,6 +553,55 @@ input[type="range"] {
   font-size: 12px;
 }
 
+/* ---- filtros ---- */
+.filters-modal {
+  min-width: 560px;
+}
+.filters-body {
+  display: flex;
+  gap: 18px;
+}
+.filters-sliders {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.filters-row {
+  flex-direction: row;
+  align-items: center;
+}
+.filters-row span {
+  flex: 0 0 80px;
+}
+.filters-row input {
+  flex: 1;
+}
+.filters-row b {
+  flex: 0 0 34px;
+  text-align: right;
+}
+.filters-quick {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.filters-preview {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+}
+.filters-preview canvas {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background:
+    repeating-conic-gradient(#cfcfcf 0% 25%, #ececec 0% 50%) 0 0 / 16px 16px;
+  max-width: 260px;
+  max-height: 260px;
+}
+
 /* ---- toasts ---- */
 .toasts {
   position: fixed;

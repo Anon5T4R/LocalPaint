@@ -29,7 +29,8 @@ export type IconName =
   | "eye"
   | "eyeOff"
   | "swap"
-  | "fit";
+  | "fit"
+  | "sliders";
 
 const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   pencil: { d: "M3 21l1-4L16 5l3 3L7 20l-4 1zM14.5 6.5l3 3" },
@@ -58,6 +59,7 @@ const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   eyeOff: { d: "M4 4l16 16M2 12s3.5-6 10-6c1.6 0 3 .3 4.3.9M22 12s-3.5 6-10 6c-1.6 0-3-.3-4.3-.9" },
   swap: { d: "M7 4v12M3 12l4 4 4-4M17 20V8M13 12l4-4 4 4" },
   fit: { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" },
+  sliders: { d: "M5 4v6M5 14v6M12 4v10M12 18v2M19 4v2M19 10v10M3 10h4M10 14h4M17 6h4" },
 };
 
 export default function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {
