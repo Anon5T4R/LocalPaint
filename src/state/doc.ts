@@ -1,0 +1,317 @@
+/** Store do documento — METADADOS (os pixels moram em lib/layers.ts).
+ *
+ *  Toda mutação estrutural de camada passa por aqui e registra o inverso no
+ *  histórico. As mutações de PIXEL (traço, balde, forma) acontecem direto no
+ *  canvas da camada; o CanvasStage captura o dirty-rect e registra via
+ *  `pushHistory` — o store nem fica sabendo do conteúdo, só que sujou.
+ */
+
+import { create } from "zustand";
+
+import {
+  canRedo,
+  canUndo,
+  newHistory,
+  push,
+  redo as histRedo,
+  undo as histUndo,
+  type History,
+  type HistoryEntry,
+} from "../lib/history";
+import {
+  createLayerCanvas,
+  dropLayerCanvas,
+  getLayerCanvas,
+  layerCtx,
+  clearAllLayerCanvases,
+  requestRender,
+} from "../lib/layers";
+import { newLayerMeta, nextLayerName, type LayerMeta } from "../lib/model";
+import { t } from "../lib/i18n";
+
+interface DocState {
+  open: boolean;
+  width: number;
+  height: number;
+  /** De baixo pra cima (índice 0 desenha primeiro). */
+  layers: LayerMeta[];
+  activeId: string | null;
+  filePath: string | null;
+  dirty: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
+
+  newDoc: (w: number, h: number, background: "white" | "transparent") => void;
+  closeDoc: () => void;
+  /** Monta o doc a partir de camadas já criadas no registro (abrir arquivo). */
+  adoptDoc: (w: number, h: number, layers: LayerMeta[], filePath: string | null) => void;
+
+  addLayer: () => void;
+  removeLayer: (id: string) => void;
+  duplicateLayer: (id: string) => void;
+  moveLayer: (id: string, dir: 1 | -1) => void;
+  setLayerProps: (id: string, p: Partial<Pick<LayerMeta, "name" | "visible" | "opacity" | "blend">>) => void;
+  setActive: (id: string) => void;
+
+  pushHistory: (e: HistoryEntry) => void;
+  undo: () => void;
+  redo: () => void;
+  markDirty: () => void;
+  markSaved: (path: string | null) => void;
+}
+
+let hist: History = newHistory();
+
+function flags() {
+  return { canUndo: canUndo(hist), canRedo: canRedo(hist), dirty: true };
+}
+
+export const useDoc = create<DocState>((set, get) => ({
+  open: false,
+  width: 0,
+  height: 0,
+  layers: [],
+  activeId: null,
+  filePath: null,
+  dirty: false,
+  canUndo: false,
+  canRedo: false,
+
+  newDoc: (w, h, background) => {
+    clearAllLayerCanvases();
+    hist = newHistory();
+    const meta = newLayerMeta(t("layers.background"));
+    createLayerCanvas(meta.id, w, h);
+    if (background === "white") {
+      const ctx = layerCtx(meta.id);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+    }
+    set({
+      open: true,
+      width: w,
+      height: h,
+      layers: [meta],
+      activeId: meta.id,
+      filePath: null,
+      dirty: false,
+      canUndo: false,
+      canRedo: false,
+    });
+    requestRender();
+  },
+
+  closeDoc: () => {
+    clearAllLayerCanvases();
+    hist = newHistory();
+    set({
+      open: false,
+      width: 0,
+      height: 0,
+      layers: [],
+      activeId: null,
+      filePath: null,
+      dirty: false,
+      canUndo: false,
+      canRedo: false,
+    });
+  },
+
+  adoptDoc: (w, h, layers, filePath) => {
+    hist = newHistory();
+    set({
+      open: true,
+      width: w,
+      height: h,
+      layers,
+      activeId: layers[layers.length - 1]?.id ?? null,
+      filePath,
+      dirty: false,
+      canUndo: false,
+      canRedo: false,
+    });
+    requestRender();
+  },
+
+  addLayer: () => {
+    const { layers, width, height, activeId } = get();
+    const meta = newLayerMeta(
+      nextLayerName(
+        layers.map((l) => l.name),
+        t("layers.base"),
+      ),
+    );
+    createLayerCanvas(meta.id, width, height);
+    // Nova camada entra ACIMA da ativa (o que todo editor faz).
+    const at = activeId ? layers.findIndex((l) => l.id === activeId) + 1 : layers.length;
+    const next = [...layers.slice(0, at), meta, ...layers.slice(at)];
+    set({ layers: next, activeId: meta.id, ...flags() });
+
+    get().pushHistory({
+      label: "addLayer",
+      bytes: 0,
+      undo: () => {
+        dropLayerCanvas(meta.id);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: s.layers.filter((l) => l.id !== meta.id),
+          activeId: s.activeId === meta.id ? (s.layers[at - 1]?.id ?? null) : s.activeId,
+        });
+      },
+      redo: () => {
+        createLayerCanvas(meta.id, width, height);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: [...s.layers.slice(0, at), meta, ...s.layers.slice(at)],
+          activeId: meta.id,
+        });
+      },
+    });
+    requestRender();
+  },
+
+  removeLayer: (id) => {
+    const { layers, width, height } = get();
+    if (layers.length <= 1) return; // última camada não sai — doc sem camada não existe
+    const at = layers.findIndex((l) => l.id === id);
+    if (at < 0) return;
+    const meta = layers[at];
+    // Guarda os pixels: o undo tem que devolver a camada COM o conteúdo.
+    const snap = layerCtx(id).getImageData(0, 0, width, height);
+
+    dropLayerCanvas(id);
+    const next = layers.filter((l) => l.id !== id);
+    set({ layers: next, activeId: next[Math.max(0, at - 1)].id, ...flags() });
+
+    get().pushHistory({
+      label: "removeLayer",
+      bytes: snap.data.byteLength,
+      undo: () => {
+        createLayerCanvas(meta.id, width, height);
+        layerCtx(meta.id).putImageData(snap, 0, 0);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: [...s.layers.slice(0, at), meta, ...s.layers.slice(at)],
+          activeId: meta.id,
+        });
+      },
+      redo: () => {
+        dropLayerCanvas(meta.id);
+        const s = useDoc.getState();
+        const i = s.layers.findIndex((l) => l.id === meta.id);
+        const rest = s.layers.filter((l) => l.id !== meta.id);
+        useDoc.setState({ layers: rest, activeId: rest[Math.max(0, i - 1)]?.id ?? null });
+      },
+    });
+    requestRender();
+  },
+
+  duplicateLayer: (id) => {
+    const { layers, width, height } = get();
+    const at = layers.findIndex((l) => l.id === id);
+    if (at < 0) return;
+    const src = getLayerCanvas(id);
+    if (!src) return;
+    const meta = { ...newLayerMeta(`${layers[at].name} ${t("layers.copySuffix")}`), visible: layers[at].visible, opacity: layers[at].opacity, blend: layers[at].blend };
+    createLayerCanvas(meta.id, width, height);
+    layerCtx(meta.id).drawImage(src, 0, 0);
+    // Snapshot pro redo: a fonte pode mudar depois; duplicar de novo não é
+    // a mesma coisa que repetir ESTA duplicação.
+    const snap = layerCtx(meta.id).getImageData(0, 0, width, height);
+
+    const next = [...layers.slice(0, at + 1), meta, ...layers.slice(at + 1)];
+    set({ layers: next, activeId: meta.id, ...flags() });
+
+    get().pushHistory({
+      label: "duplicateLayer",
+      bytes: snap.data.byteLength,
+      undo: () => {
+        dropLayerCanvas(meta.id);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: s.layers.filter((l) => l.id !== meta.id),
+          activeId: id,
+        });
+      },
+      redo: () => {
+        createLayerCanvas(meta.id, width, height);
+        layerCtx(meta.id).putImageData(snap, 0, 0);
+        const s = useDoc.getState();
+        const i = s.layers.findIndex((l) => l.id === id);
+        useDoc.setState({
+          layers: [...s.layers.slice(0, i + 1), meta, ...s.layers.slice(i + 1)],
+          activeId: meta.id,
+        });
+      },
+    });
+    requestRender();
+  },
+
+  moveLayer: (id, dir) => {
+    const { layers } = get();
+    const at = layers.findIndex((l) => l.id === id);
+    const to = at + dir;
+    if (at < 0 || to < 0 || to >= layers.length) return;
+    const next = [...layers];
+    [next[at], next[to]] = [next[to], next[at]];
+    set({ layers: next, ...flags() });
+
+    const swap = (a: number, b: number) => {
+      const s = useDoc.getState();
+      const arr = [...s.layers];
+      [arr[a], arr[b]] = [arr[b], arr[a]];
+      useDoc.setState({ layers: arr });
+    };
+    get().pushHistory({
+      label: "moveLayer",
+      bytes: 0,
+      undo: () => swap(to, at),
+      redo: () => swap(at, to),
+    });
+    requestRender();
+  },
+
+  setLayerProps: (id, p) => {
+    const { layers } = get();
+    const at = layers.findIndex((l) => l.id === id);
+    if (at < 0) return;
+    const before = layers[at];
+    const after = { ...before, ...p };
+    const apply = (m: LayerMeta) => {
+      const s = useDoc.getState();
+      useDoc.setState({ layers: s.layers.map((l) => (l.id === id ? m : l)) });
+      requestRender();
+    };
+    set({ layers: layers.map((l) => (l.id === id ? after : l)), ...flags() });
+
+    get().pushHistory({
+      label: "layerProps",
+      bytes: 0,
+      undo: () => apply(before),
+      redo: () => apply(after),
+    });
+    requestRender();
+  },
+
+  setActive: (id) => set({ activeId: id }),
+
+  pushHistory: (e) => {
+    hist = push(hist, e);
+    set({ canUndo: canUndo(hist), canRedo: canRedo(hist), dirty: true });
+  },
+
+  undo: () => {
+    hist = histUndo(hist);
+    set({ canUndo: canUndo(hist), canRedo: canRedo(hist), dirty: true });
+    requestRender();
+  },
+
+  redo: () => {
+    hist = histRedo(hist);
+    set({ canUndo: canUndo(hist), canRedo: canRedo(hist), dirty: true });
+    requestRender();
+  },
+
+  markDirty: () => set({ dirty: true }),
+  markSaved: (filePath) => set({ dirty: false, filePath }),
+}));

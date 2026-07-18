@@ -1,0 +1,33 @@
+[package]
+name = "localpaint"
+version = "0.1.0"
+description = "LocalPaint — editor raster 100% offline da suíte Local"
+authors = ["Taylor"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/Anon5T4R/LocalPaint"
+
+[lib]
+# O sufixo `_lib` evita conflito entre o nome da lib e o do binário no Windows
+# (https://github.com/rust-lang/cargo/issues/8519).
+name = "localpaint_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+# Escolher o que abrir e onde salvar. Sem isto o app só pintaria em memória.
+tauri-plugin-dialog = "2"
+# "Mostrar na pasta" depois de exportar (padrão da suíte).
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# I/O de bytes: o `.tpaint` (zip) e os PNG/JPG se montam NO WEBVIEW (regra da
+# suíte: "zip sempre no webview"); o Rust só lê e grava o arquivo. Base64 é a
+# ponte — serializar Vec<u8> pelo invoke vira array JSON e multiplica o custo.
+base64 = "0.22"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"

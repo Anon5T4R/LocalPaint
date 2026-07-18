@@ -1,0 +1,92 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  # Disparo manual = build de TESTE (nao publica release: ver a tagName abaixo).
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      # Serializa os jobs: os dois tentavam CRIAR o release na mesma tag ao
+      # mesmo tempo e um perdia a corrida (already_exists) sem subir o artefato.
+      # Com um job por vez, o primeiro cria e o segundo anexa.
+      max-parallel: 1
+      matrix:
+        include:
+          - platform: windows-latest
+            rust-target: x86_64-pc-windows-msvc
+            bundles: nsis
+          - platform: ubuntu-22.04
+            rust-target: x86_64-unknown-linux-gnu
+            bundles: appimage
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential
+
+      - name: Install JS deps
+        run: npm ci
+
+      - name: Cargo.lock em dia (--locked)
+        working-directory: src-tauri
+        run: cargo fetch --locked
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # So preenche em build de TAG (fora de tag, ref_name seria o branch e
+          # um disparo manual da main criaria uma release chamada "main").
+          tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+          releaseName: "LocalPaint ${{ github.ref_name }}"
+          releaseBody: |
+            ## LocalPaint ${{ github.ref_name }}
+
+            Editor de imagem raster 100% offline da suíte Local: camadas com
+            modos de mesclagem, pincel com pressão de caneta, lápis pixel-perfect,
+            balde com tolerância, formas, undo por região e formato aberto
+            `.tpaint` (zip de PNGs — abre em qualquer descompactador). Sem
+            nuvem, sem conta, sem telemetria.
+
+            ### Downloads
+            - **Windows — Instalador:** `*-setup.exe`
+            - **Linux — AppImage:** `*.AppImage` (dê permissão de execução e rode)
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: false
+          args: --bundles ${{ matrix.bundles }}
