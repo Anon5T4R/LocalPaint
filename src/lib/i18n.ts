@@ -167,6 +167,9 @@ const pt = {
   "refine.restore": "Restaurar",
   "refine.erase": "Apagar",
   "refine.smooth": "Suavizar borda",
+  "refine.decontam": "Descontaminar",
+  "refine.decontamTip":
+    "Tira da borda o resíduo de cor do fundo antigo — o halo que aparece quando o recorte pousa num fundo de outra cor. Use junto com Suavizar.",
   "refine.veil": "Véu",
   "refine.apply": "Aplicar (Enter)",
   "refine.hint": "Pinte pra restaurar o que a remoção apagou; o botão direito inverte o pincel. Enter aplica, Esc cancela.",
@@ -354,6 +357,9 @@ const en: Record<MessageKey, string> = {
   "refine.restore": "Restore",
   "refine.erase": "Erase",
   "refine.smooth": "Smooth edge",
+  "refine.decontam": "Decontaminate",
+  "refine.decontamTip":
+    "Removes the old background's colour residue from the edge — the halo that shows up once the cutout lands on a differently coloured backdrop. Use it alongside Smooth.",
   "refine.veil": "Veil",
   "refine.apply": "Apply (Enter)",
   "refine.hint": "Paint to restore what the removal erased; right button inverts the brush. Enter applies, Esc cancels.",
@@ -539,6 +545,9 @@ const es: Record<MessageKey, string> = {
   "refine.restore": "Restaurar",
   "refine.erase": "Borrar",
   "refine.smooth": "Suavizar borde",
+  "refine.decontam": "Descontaminar",
+  "refine.decontamTip":
+    "Quita del borde el residuo de color del fondo antiguo — el halo que aparece cuando el recorte cae sobre un fondo de otro color. Úsalo junto con Suavizar.",
   "refine.veil": "Velo",
   "refine.apply": "Aplicar (Enter)",
   "refine.hint": "Pinta para restaurar lo que la eliminación borró; el botón derecho invierte el pincel. Enter aplica, Esc cancela.",

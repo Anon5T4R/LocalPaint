@@ -4,12 +4,17 @@ import { useTools } from "../state/tools";
 
 /** Barra contextual do modo REFINAR (flutua no topo do palco enquanto o modo
  *  vive). Pincel Restaurar/Apagar (botão direito inverte na hora), tamanho
- *  (o MESMO do pincel normal — useTools.size), "Suavizar borda" (blur da
- *  máscara), véu opcional, Aplicar (Enter) / Cancelar (Esc). */
+ *  (o MESMO do pincel normal — useTools.size), "Suavizar borda" (feather da
+ *  máscara), "Descontaminar borda" (tira o resíduo do fundo velho preso na
+ *  franja), véu opcional, Aplicar (Enter) / Cancelar (Esc).
+ *
+ *  Os dois sliders de borda ficam lado a lado porque se usam juntos: suavizar
+ *  alarga a franja, descontaminar limpa a cor dela. */
 export default function RefineBar() {
   const active = useRefine((s) => s.active);
   const mode = useRefine((s) => s.mode);
   const smooth = useRefine((s) => s.smooth);
+  const decontam = useRefine((s) => s.decontam);
   const veil = useRefine((s) => s.veil);
   const size = useTools((s) => s.size);
   if (!active) return null;
@@ -41,6 +46,11 @@ export default function RefineBar() {
         <span>{t("refine.smooth")}</span>
         <input type="range" min={0} max={30} value={smooth} onChange={(e) => st.setSmooth(Number(e.target.value))} />
         <b>{smooth}</b>
+      </label>
+      <label className="refine-param" title={t("refine.decontamTip")}>
+        <span>{t("refine.decontam")}</span>
+        <input type="range" min={0} max={10} value={decontam} onChange={(e) => st.setDecontam(Number(e.target.value))} />
+        <b>{decontam}</b>
       </label>
       <label className="refine-check">
         <input type="checkbox" checked={veil} onChange={(e) => st.setVeil(e.target.checked)} />
