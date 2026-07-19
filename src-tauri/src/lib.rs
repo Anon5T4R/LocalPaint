@@ -65,6 +65,7 @@ pub fn run() {
             fsio::write_file_b64,
             download::model_fetch,
             download::model_path,
+            download::model_cancel,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

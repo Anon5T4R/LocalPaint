@@ -8,49 +8,18 @@
  *  O arquivo chega ao webview por `convertFileSrc` (asset protocol, escopo =
  *  só a pasta de modelos), nunca por base64: 170 MB virariam ~230 MB de string.
  *
- *  Macetes de WASM herdados do LocalSlides (`backgroundRemoval.ts` de lá):
- *  o runtime wasm entra por import ?url (assets do bundle — offline, sem CDN) e
- *  `numThreads = 1` porque a build multithread exige COOP/COEP que não setamos.
- *  Diferença da 1.27 (Slides usa 1.17): os artefatos são um par único
- * `ort-wasm-simd-threaded.wasm` + `.mjs`, importados com ?url (ver abaixo).
+ *  Os macetes de WASM (bundle só-CPU, runtime por `?url`, `numThreads = 1`)
+ *  moram em `ort.ts` desde a fatia ⑤ — com dois modelos no app, duas cópias da
+ *  mesma configuração divergindo é o bug que a v0.5.0 já pagou.
  */
 
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-// O subpath /wasm importa o bundle SÓ-CPU: o entry padrão do 1.27 traz o
-// backend webgpu (JSEP) e em runtime pede `ort-wasm-simd-threaded.jsep.mjs`
-// — que não embarcamos — morrendo com "no available backend found" NO APP
-// INSTALADO (em dev nada quebra; bug pego no teste real da v0.5.0). O bundle
-// wasm usa exatamente o par `ort-wasm-simd-threaded.{mjs,wasm}` de public/ort,
-// e CPU é o alvo desta suíte de todo jeito.
-import * as ort from "onnxruntime-web/wasm";
-// Os DOIS arquivos do runtime entram pelo pipeline do vite (?url): em dev
-// viram URL servida como módulo de verdade, no build viram assets emitidos.
-// O caminho antigo (cópia em public/ort) NÃO funciona: o vite não deixa
-// importar módulo de public/ — o wrapper ?import devolve uma STRING e o ORT
-// morria com "no available backend found" (pego no teste real da v0.5.0).
-import ortMjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
-import ortWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 
 import { saliencyToAlpha, toIsnetInput } from "./matte";
-
-ort.env.wasm.wasmPaths = { mjs: ortMjsUrl, wasm: ortWasmUrl };
-ort.env.wasm.numThreads = 1;
-
-/** Selfteste do backend (dev/prova): tenta criar uma sessão com bytes de lixo.
- *  Backend SAUDÁVEL carrega o runtime de /ort/ e falha no PARSE DO MODELO;
- *  backend quebrado falha antes, com "no available backend found" — que foi
- *  exatamente o bug da v0.5.0 no app instalado (bundle padrão pedia o .jsep.mjs
- *  que não embarcamos). Exercitar > listar. */
-export async function ortSelfTest(): Promise<string> {
-  try {
-    await ort.InferenceSession.create(new Uint8Array([1, 2, 3, 4]));
-    return "impossível: lixo virou modelo";
-  } catch (e) {
-    return String(e instanceof Error ? e.message : e);
-  }
-}
+import { ort } from "./ort";
 
 /** Asset do espelho da suíte (entrada correspondente no MANIFEST.json de lá). */
+export const MODEL_FILE = "isnet-general-use.onnx";
 export const MODEL_URL = "https://github.com/Anon5T4R/Local-runtimes/releases/download/v1/isnet-general-use.onnx";
 export const MODEL_SHA256 = "60920e99c45464f2ba57bee2ad08c919a52bbf852739e96947fbb4358c0d964a";
 export const MODEL_BYTES = 178648008;
@@ -60,12 +29,17 @@ const INPUT_DIM = 1024;
 
 /** Caminho do modelo no disco, ou null se ainda não foi baixado. */
 export function modelPath(): Promise<string | null> {
-  return invoke<string | null>("model_path");
+  return invoke<string | null>("model_path", { file: MODEL_FILE });
 }
 
 /** Baixa o modelo (progresso sai pelo evento Tauri `model-progress`). */
 export function fetchModel(): Promise<string> {
-  return invoke<string>("model_fetch", { url: MODEL_URL, sha256: MODEL_SHA256 });
+  return invoke<string>("model_fetch", { url: MODEL_URL, sha256: MODEL_SHA256, file: MODEL_FILE });
+}
+
+/** Pede o cancelamento do download em curso. */
+export function cancelFetch(): Promise<void> {
+  return invoke<void>("model_cancel");
 }
 
 let sessionPromise: Promise<ort.InferenceSession> | null = null;

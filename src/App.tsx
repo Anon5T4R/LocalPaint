@@ -6,6 +6,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
 import BgRemoveModal from "./components/BgRemoveModal";
+import RemoveObjModal from "./components/RemoveObjModal";
 import CanvasStage, { requestZoom } from "./components/CanvasStage";
 import ColorPanel from "./components/ColorPanel";
 import FiltersModal from "./components/FiltersModal";
@@ -55,6 +56,7 @@ export default function App() {
   const [exportOpen, setExportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
+  const [objOpen, setObjOpen] = useState(false);
 
   /** Ação que descarta o doc atual passa por aqui: pergunta se houver sujeira. */
   const guardUnsaved = async (): Promise<boolean> => {
@@ -314,6 +316,16 @@ export default function App() {
           <button disabled={!open || refineActive} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
             <Icon name="scissors" /> {t("top.removeBg")}
           </button>
+          {/* Só com seleção parada: sem seleção não há o que remover, e com o
+              recorte FLUTUANTE os pixels não estão mais na camada — o inpaint
+              leria um buraco que o usuário ainda não assentou. */}
+          <button
+            disabled={!open || refineActive || !selRect || selFloating}
+            title={t("top.removeObjTip")}
+            onClick={() => setObjOpen(true)}
+          >
+            <Icon name="eraser" /> {t("top.removeObj")}
+          </button>
         </div>
 
         <div className="topbar-group">
@@ -408,6 +420,7 @@ export default function App() {
       <NewDocModal open={newOpen} onClose={() => setNewOpen(false)} />
       <FiltersModal open={filtersOpen} onClose={() => setFiltersOpen(false)} />
       <BgRemoveModal open={bgOpen} onClose={() => setBgOpen(false)} />
+      <RemoveObjModal open={objOpen} onClose={() => setObjOpen(false)} />
       <TextModal at={textAt} onClose={() => useTools.getState().setTextAt(null)} />
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => setExportOpen(false)}>

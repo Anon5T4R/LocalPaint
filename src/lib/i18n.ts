@@ -140,6 +140,15 @@ const pt = {
   "bg.err": "Falha ao remover o fundo: {err}",
   "bg.refineStart": "Fundo removido — refine o recorte com o pincel e aplique (Enter)",
 
+  "top.removeObj": "Remover objeto",
+  "top.removeObjTip": "Apagar o que está selecionado e preencher com o fundo (IA local) — precisa de uma seleção",
+  "obj.title": "Remover objeto",
+  "obj.needModel":
+    "O preenchimento usa o modelo LaMa (~{size} MB), baixado uma única vez. Depois disso tudo roda 100% local — nada sai da sua máquina.",
+  "obj.running": "Removendo o objeto… isso leva alguns segundos (na primeira vez, mais um pouco pra carregar o modelo).",
+  "obj.done": "Objeto removido em {s} s",
+  "obj.err": "Falha ao remover o objeto: {err}",
+
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",
   "refine.erase": "Apagar",
@@ -308,6 +317,15 @@ const en: Record<MessageKey, string> = {
   "bg.err": "Failed to remove the background: {err}",
   "bg.refineStart": "Background removed — refine the cutout with the brush and apply (Enter)",
 
+  "top.removeObj": "Remove object",
+  "top.removeObjTip": "Erase what's selected and fill it in with the background (local AI) — needs a selection",
+  "obj.title": "Remove object",
+  "obj.needModel":
+    "The fill uses the LaMa model (~{size} MB), downloaded only once. After that everything runs 100% locally — nothing leaves your machine.",
+  "obj.running": "Removing the object… this takes a few seconds (the first time, a bit more to load the model).",
+  "obj.done": "Object removed in {s} s",
+  "obj.err": "Failed to remove the object: {err}",
+
   "refine.title": "Refine cutout",
   "refine.restore": "Restore",
   "refine.erase": "Erase",
@@ -473,6 +491,15 @@ const es: Record<MessageKey, string> = {
   "bg.done": "Fondo quitado",
   "bg.err": "Error al quitar el fondo: {err}",
   "bg.refineStart": "Fondo quitado — refina el recorte con el pincel y aplica (Enter)",
+
+  "top.removeObj": "Quitar objeto",
+  "top.removeObjTip": "Borrar lo seleccionado y rellenarlo con el fondo (IA local) — necesita una selección",
+  "obj.title": "Quitar objeto",
+  "obj.needModel":
+    "El relleno usa el modelo LaMa (~{size} MB), descargado una sola vez. Después todo corre 100% local — nada sale de tu máquina.",
+  "obj.running": "Quitando el objeto… tarda unos segundos (la primera vez, un poco más para cargar el modelo).",
+  "obj.done": "Objeto quitado en {s} s",
+  "obj.err": "Error al quitar el objeto: {err}",
 
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",

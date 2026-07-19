@@ -30,8 +30,12 @@ if (import.meta.env.DEV) {
         layers: ly,
         selection: sl.useSelection,
         refine: rf.useRefine,
-        // Prova do backend do ORT sem precisar do modelo (ver bgremove.ts).
-        ortSelfTest: () => import("./lib/bgremove").then((m) => m.ortSelfTest()),
+        // Prova do backend do ORT sem precisar do modelo (ver ort.ts).
+        ortSelfTest: () => import("./lib/ort").then((m) => m.ortSelfTest()),
+        // Fatia ⑤: a prova de GUI do "Remover objeto" precisa disparar o
+        // fluxo sem clicar no modal (o download de 208 MB é o do disco).
+        removeobj: () => import("./lib/removeobj"),
+        inpaint: () => import("./lib/inpaint"),
       };
     },
   );
