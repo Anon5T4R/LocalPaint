@@ -619,6 +619,31 @@ input[type="range"] {
   font-size: 12px;
 }
 
+/* Spinner dos modais de IA. É CSS puro de propósito: animação de composição
+   roda no compositor e continua girando mesmo se a thread principal engasgar
+   um instante — o oposto do que a v0.9.0 mostrava (um texto parado por 20 s).
+   Ele é a PROVA VISÍVEL de que a inferência saiu da thread: se um dia alguém
+   trouxer o `session.run` de volta pra cá, o spinner congela e denuncia. */
+.spin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.spinner {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent, #6aa9ff);
+  border-radius: 50%;
+  animation: lp-spin 0.7s linear infinite;
+}
+@keyframes lp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ---- filtros ---- */
 .filters-modal {
   min-width: 560px;

@@ -10,13 +10,15 @@
  *
  *  Os macetes de WASM (bundle só-CPU, runtime por `?url`, `numThreads = 1`)
  *  moram em `ort.ts` desde a fatia ⑤ — com dois modelos no app, duas cópias da
- *  mesma configuração divergindo é o bug que a v0.5.0 já pagou.
+ *  mesma configuração divergindo é o bug que a v0.5.0 já pagou. Desde a
+ *  v0.10.0 quem importa o `ort.ts` é o `ai.worker.ts`, não este arquivo: a
+ *  inferência saiu da thread principal (a janela congelava durante ela).
  */
 
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 
-import { saliencyToAlpha, toIsnetInput } from "./matte";
-import { ort } from "./ort";
+import type { AiPhase } from "./aitypes";
+import { runAi } from "./aiworker";
 
 /** Asset do espelho da suíte (entrada correspondente no MANIFEST.json de lá). */
 export const MODEL_FILE = "isnet-general-use.onnx";
@@ -42,28 +44,6 @@ export function cancelFetch(): Promise<void> {
   return invoke<void>("model_cancel");
 }
 
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
-
-/** Sessão única e cacheada (criar custa segundos; o modelo não muda).
- *  Falha limpa o cache — a próxima tentativa recomeça do zero. */
-function ensureSession(path: string): Promise<ort.InferenceSession> {
-  if (!sessionPromise) {
-    sessionPromise = (async () => {
-      const res = await fetch(convertFileSrc(path));
-      // Lição do LocalVideo: o asset protocol responde ERRO (não o arquivo)
-      // pra caminho fora do escopo — sem este cheque o corpo do erro iria
-      // de "modelo" pro onnxruntime e o diagnóstico viraria adivinhação.
-      if (!res.ok) throw new Error(`asset ${res.status}`);
-      const buf = await res.arrayBuffer();
-      return ort.InferenceSession.create(new Uint8Array(buf), { executionProviders: ["wasm"] });
-    })();
-    sessionPromise.catch(() => {
-      sessionPromise = null;
-    });
-  }
-  return sessionPromise;
-}
-
 export interface BgRemoveResult {
   /** Pixels ORIGINAIS da camada, intocados — o modo Refinar precisa deles. */
   original: ImageData;
@@ -74,12 +54,18 @@ export interface BgRemoveResult {
 /** Roda o isnet na imagem do canvas e devolve `{ original, mask }` — quem
  *  aplica é o modo Refinar (state/refine.ts): a máscara vira editável antes
  *  de gravar. Não toca no canvas de entrada. */
-export async function removeBackground(canvas: HTMLCanvasElement): Promise<BgRemoveResult> {
+export async function removeBackground(
+  canvas: HTMLCanvasElement,
+  onPhase?: (p: AiPhase) => void,
+): Promise<BgRemoveResult> {
   const path = await modelPath();
   if (!path) throw new Error("modelo ausente"); // a UI garante o download antes
-  const session = await ensureSession(path);
 
-  // 1. Reamostra pra 1024×1024 (o isnet só conhece esse tamanho).
+  // 1. Reamostra pra 1024×1024 (o isnet só conhece esse tamanho). Continua
+  //    AQUI, e não no worker: quem reamostra é o `drawImage`, que precisa de
+  //    canvas. OffscreenCanvas existiria no worker, mas trocar o reamostrador
+  //    trocaria os pixels — e o gate desta fatia é "o resultado não mudou".
+  //    São dois `drawImage`; não é onde estavam os segundos.
   const off = document.createElement("canvas");
   off.width = INPUT_DIM;
   off.height = INPUT_DIM;
@@ -87,14 +73,12 @@ export async function removeBackground(canvas: HTMLCanvasElement): Promise<BgRem
   octx.drawImage(canvas, 0, 0, INPUT_DIM, INPUT_DIM);
   const small = octx.getImageData(0, 0, INPUT_DIM, INPUT_DIM);
 
-  // 2. Inferência.
-  const tensor = new ort.Tensor("float32", toIsnetInput(small.data, INPUT_DIM, INPUT_DIM), [1, 3, INPUT_DIM, INPUT_DIM]);
-  const results = await session.run({ [session.inputNames[0]]: tensor });
-  const out = results[session.outputNames[0]];
-  const dims = out.dims;
-  const outH = dims[dims.length - 2] ?? INPUT_DIM;
-  const outW = dims[dims.length - 1] ?? INPUT_DIM;
-  const alpha = saliencyToAlpha(out.data as Float32Array);
+  // 2. Inferência — no worker, pra janela não congelar (ver `ai.worker.ts`).
+  //    O buffer do `small` é transferido; `small` fica destacado depois disto
+  //    e não pode mais ser lido (nada abaixo o lê).
+  const r = await runAi({ task: "isnet", rgba: small.data }, path, onPhase);
+  if (r.task !== "isnet") throw new Error("resposta trocada"); // narrow
+  const { alpha, w: outW, h: outH } = r;
 
   // 3. Máscara → canvas (branco + alpha), upscale bilinear pro tamanho real.
   const maskCanvas = document.createElement("canvas");

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import type { AiPhase } from "../lib/aitypes";
+import { cancelAi } from "../lib/aiworker";
 import { t } from "../lib/i18n";
 import { getLayerCanvas, layerCtx, requestRender } from "../lib/layers";
 import { cancelFetch, fetchModel, MODEL_BYTES, modelPath, removeObject } from "../lib/removeobj";
@@ -35,6 +37,10 @@ const mb = (n: number) => Math.round(n / MB);
 export default function RemoveObjModal({ open, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [progress, setProgress] = useState<{ got: number; total: number | null } | null>(null);
+  // Sub-fase de `running`: carregando a sessão ou de fato inferindo. Só faz
+  // sentido mostrar porque a thread principal agora está VIVA pra repintar —
+  // na v0.9.0 um setState aqui não teria como chegar à tela.
+  const [ai, setAi] = useState<AiPhase | null>(null);
   const pushToast = useUi((s) => s.pushToast);
   // O modal pode fechar no meio de um await; o ref evita setState em fantasma.
   const alive = useRef(false);
@@ -54,6 +60,7 @@ export default function RemoveObjModal({ open, onClose }: Props) {
 
   const run = async () => {
     setPhase("running");
+    setAi(null);
     try {
       const doc = useDoc.getState();
       const { rect, mask } = useSelection.getState();
@@ -67,6 +74,9 @@ export default function RemoveObjModal({ open, onClose }: Props) {
         { bounds: rect, mask },
         doc.width,
         doc.height,
+        (p) => {
+          if (alive.current) setAi(p);
+        },
       );
 
       const apply = () => {
@@ -176,8 +186,30 @@ export default function RemoveObjModal({ open, onClose }: Props) {
         )}
 
         {/* Aviso de demora honesto: são dezenas de segundos em CPU, e a
-            primeira vez ainda soma o parse dos 208 MB de pesos. */}
-        {phase === "running" && <p className="muted">{t("obj.running")}</p>}
+            primeira vez ainda soma o parse dos 208 MB de pesos. O spinner
+            GIRA (CSS, thread principal livre) e a fase diz em que ponto está
+            — as duas coisas que a v0.9.0 não conseguia entregar porque a
+            janela estava congelada. */}
+        {phase === "running" && (
+          <>
+            <p className="muted spin-row">
+              <span className="spinner" aria-hidden="true" />
+              {ai === "loading" ? t("ai.loading") : t("obj.running")}
+            </p>
+            {/* Cancelar de VERDADE: mata o worker no meio do wasm. O preço
+                (recarregar a sessão na próxima vez) está documentado em
+                `aiworker.ts`; quem cancela quer sair agora. */}
+            <div className="modal-actions">
+              <button
+                onClick={() => {
+                  cancelAi();
+                }}
+              >
+                {t("dlg.cancel")}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

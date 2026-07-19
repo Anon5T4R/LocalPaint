@@ -32,10 +32,22 @@ if (import.meta.env.DEV) {
         refine: rf.useRefine,
         // Prova do backend do ORT sem precisar do modelo (ver ort.ts).
         ortSelfTest: () => import("./lib/ort").then((m) => m.ortSelfTest()),
+        // O ORT cru, pra ponte poder montar uma sessão NA THREAD PRINCIPAL e
+        // reproduzir o caminho da v0.9.0. É assim que a v0.10.0 prova as duas
+        // coisas de uma vez, no mesmo documento e com a mesma imagem: que o
+        // resultado do worker é byte a byte igual ao de antes, e quanto a
+        // thread principal ficava parada quando a inferência rodava nela.
+        ort: () => import("./lib/ort"),
         // Fatia ⑤: a prova de GUI do "Remover objeto" precisa disparar o
         // fluxo sem clicar no modal (o download de 208 MB é o do disco).
         removeobj: () => import("./lib/removeobj"),
         inpaint: () => import("./lib/inpaint"),
+        // v0.10.0: a inferência mora num worker. A ponte expõe o dono dele
+        // pra que a prova de "a UI não congela" possa ser MEDIDA daqui —
+        // dispara `runAi`, conta quadros na thread principal enquanto roda,
+        // e chama `cancelAi` pra provar que o Cancelar interrompe mesmo.
+        aiworker: () => import("./lib/aiworker"),
+        bgremove: () => import("./lib/bgremove"),
       };
     },
   );

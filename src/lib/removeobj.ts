@@ -2,9 +2,14 @@
  *
  *  O usuário seleciona algo (retângulo, laço, varinha — a seleção por MÁSCARA
  *  existe desde a v0.7.0) e manda remover; o modelo preenche o buraco com o
- *  que deveria estar atrás. Este módulo é a ORQUESTRAÇÃO (sessão do ORT,
- *  pixels da camada, medição); a matemática de recorte/escala/colagem — onde
- *  mora o risco de erro de 1 pixel — é pura e testada em `inpaint.ts`.
+ *  que deveria estar atrás. Este módulo é a ORQUESTRAÇÃO (download do modelo,
+ *  pixels da camada); a matemática de recorte/escala/colagem — onde mora o
+ *  risco de erro de 1 pixel — é pura e testada em `inpaint.ts`.
+ *
+ *  A INFERÊNCIA NÃO MORA MAIS AQUI. Desde a v0.10.0 ela roda no
+ *  `ai.worker.ts`: os ~20 s de `session.run` congelavam a janela inteira,
+ *  porque o wasm do onnxruntime não cede a thread. Este módulo virou o
+ *  recortador — pega os pixels, manda pro worker, recebe o resultado.
  *
  *  Por que LaMa e não MI-GAN (decisão do João, `analises-viabilidade.md`
  *  §4.6b): no mesmo teste o MI-GAN deixou fantasma visível e o LaMa saiu
@@ -16,23 +21,13 @@
  *  nome do arquivo moram AQUI, no front — o Rust só executa o que lhe mandam.
  */
 
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 
+import type { AiPhase } from "./aitypes";
+import { runAi } from "./aiworker";
 import type { Rect } from "./geometry";
-import {
-  blendHole,
-  cropMask,
-  DILATE_PX,
-  fromLamaOutput,
-  INPAINT_DIM,
-  planInpaint,
-  resample,
-  resampleMaskMax,
-  toLamaImage,
-  toLamaMask,
-} from "./inpaint";
+import { cropMask, DILATE_PX, planInpaint } from "./inpaint";
 import { dilateSel, type MaskSel } from "./mask";
-import { ort } from "./ort";
 
 /** Asset do espelho da suíte (entrada correspondente no MANIFEST.json de lá).
  *  O Hugging Face fica FORA do caminho crítico de propósito: a fonte
@@ -58,30 +53,6 @@ export function cancelFetch(): Promise<void> {
   return invoke<void>("model_cancel");
 }
 
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
-
-/** Sessão única e cacheada. Criar custa ~8 s pra este modelo (208 MB de pesos
- *  parseados no wasm), e o modelo não muda — pagar isso por clique seria
- *  dobrar o tempo percebido. Falha limpa o cache: a próxima tentativa
- *  recomeça do zero em vez de herdar uma sessão morta. */
-function ensureSession(path: string): Promise<ort.InferenceSession> {
-  if (!sessionPromise) {
-    sessionPromise = (async () => {
-      const res = await fetch(convertFileSrc(path));
-      // Lição do LocalVideo: o asset protocol responde ERRO (não o arquivo)
-      // pra caminho fora do escopo — sem este cheque o corpo do erro iria do
-      // "modelo" pro onnxruntime e o diagnóstico viraria adivinhação.
-      if (!res.ok) throw new Error(`asset ${res.status}`);
-      const buf = await res.arrayBuffer();
-      return ort.InferenceSession.create(new Uint8Array(buf), { executionProviders: ["wasm"] });
-    })();
-    sessionPromise.catch(() => {
-      sessionPromise = null;
-    });
-  }
-  return sessionPromise;
-}
-
 export interface InpaintResult {
   /** Janela do documento que foi processada (o undo é o dirty-rect dela). */
   crop: Rect;
@@ -104,35 +75,27 @@ export async function removeObject(
   sel: MaskSel,
   docW: number,
   docH: number,
+  onPhase?: (p: AiPhase) => void,
 ): Promise<InpaintResult> {
   const path = await modelPath();
   if (!path) throw new Error("modelo ausente"); // a UI garante o download antes
-  const session = await ensureSession(path);
 
   const grown = dilateSel(sel, docW, docH, DILATE_PX);
   const crop = planInpaint(grown.bounds, docW, docH);
 
   const ctx = canvas.getContext("2d")!;
   const before = ctx.getImageData(crop.x, crop.y, crop.w, crop.h);
+  // `px` é a cópia descartável que atravessa pro worker e volta preenchida.
+  // O `before` fica intacto de propósito: é ele que o undo devolve, e um
+  // buffer transferido viria de volta com byteLength 0.
   const px = new Uint8ClampedArray(before.data);
   const mask = cropMask(grown, crop);
 
-  // Janela → 512 (identidade quando já é 512: `resample` devolve cópia).
-  const img512 = resample(px, crop.w, crop.h, INPAINT_DIM, INPAINT_DIM);
-  const mask512 = resampleMaskMax(mask, crop.w, crop.h, INPAINT_DIM, INPAINT_DIM);
+  // Reamostragem, tensores, inferência e colagem acontecem TODOS no worker
+  // (ver `aitypes.ts` sobre onde a fronteira foi posta e por quê). Aqui a
+  // thread principal só recorta e recebe — nada que dure mais que alguns ms.
+  const r = await runAi({ task: "lama", rgba: px, mask, w: crop.w, h: crop.h }, path, onPhase);
+  if (r.task !== "lama") throw new Error("resposta trocada"); // narrow, não deve ocorrer
 
-  const t0 = performance.now();
-  const out = await session.run({
-    image: new ort.Tensor("float32", toLamaImage(img512, INPAINT_DIM, INPAINT_DIM), [1, 3, INPAINT_DIM, INPAINT_DIM]),
-    mask: new ort.Tensor("float32", toLamaMask(mask512), [1, 1, INPAINT_DIM, INPAINT_DIM]),
-  });
-  const inferenceMs = performance.now() - t0;
-
-  const filled512 = fromLamaOutput(out.output.data as Float32Array, INPAINT_DIM, INPAINT_DIM);
-  const filled = resample(filled512, INPAINT_DIM, INPAINT_DIM, crop.w, crop.h);
-  // Colagem pela máscara NATIVA: só o buraco muda, o entorno volta byte a
-  // byte igual (é o que o teste de `blendHole` trava).
-  blendHole(px, filled, mask);
-
-  return { crop, before, after: new ImageData(px, crop.w, crop.h), inferenceMs };
+  return { crop, before, after: new ImageData(r.rgba, crop.w, crop.h), inferenceMs: r.inferenceMs };
 }

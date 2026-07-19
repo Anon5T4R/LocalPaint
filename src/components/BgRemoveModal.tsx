@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 
+import type { AiPhase } from "../lib/aitypes";
+import { cancelAi } from "../lib/aiworker";
 import { cancelFetch, fetchModel, MODEL_BYTES, modelPath, removeBackground } from "../lib/bgremove";
 import { t } from "../lib/i18n";
 import { getLayerCanvas } from "../lib/layers";
@@ -27,6 +29,9 @@ const mb = (n: number) => Math.round(n / MB);
 export default function BgRemoveModal({ open, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [progress, setProgress] = useState<{ got: number; total: number | null } | null>(null);
+  // Sub-fase de `running` (carregando a sessão × inferindo) — ver o mesmo
+  // comentário no RemoveObjModal.
+  const [ai, setAi] = useState<AiPhase | null>(null);
   const pushToast = useUi((s) => s.pushToast);
   // O modal pode fechar no meio de um await; o ref evita setState em fantasma.
   const alive = useRef(false);
@@ -44,13 +49,16 @@ export default function BgRemoveModal({ open, onClose }: Props) {
 
   const run = async () => {
     setPhase("running");
+    setAi(null);
     try {
       const s = useDoc.getState();
       const layerId = s.activeId;
       const canvas = layerId ? getLayerCanvas(layerId) : undefined;
       if (!layerId || !canvas) throw new Error("no layer");
 
-      const { original, mask } = await removeBackground(canvas);
+      const { original, mask } = await removeBackground(canvas, (p) => {
+        if (alive.current) setAi(p);
+      });
       // Nada de histórico aqui — o Aplicar do modo Refinar grava o undo único.
       useRefine.getState().start(layerId, original, mask);
       pushToast("ok", t("bg.refineStart"));
@@ -140,7 +148,25 @@ export default function BgRemoveModal({ open, onClose }: Props) {
           </>
         )}
 
-        {phase === "running" && <p className="muted">{t("bg.running")}</p>}
+        {/* Spinner girando + fase + Cancelar real — a inferência mudou de
+            thread na v0.10.0 e a janela agora consegue repintar durante ela. */}
+        {phase === "running" && (
+          <>
+            <p className="muted spin-row">
+              <span className="spinner" aria-hidden="true" />
+              {ai === "loading" ? t("ai.loading") : t("bg.running")}
+            </p>
+            <div className="modal-actions">
+              <button
+                onClick={() => {
+                  cancelAi();
+                }}
+              >
+                {t("dlg.cancel")}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

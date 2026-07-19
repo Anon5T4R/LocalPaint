@@ -149,6 +149,12 @@ const pt = {
   "obj.done": "Objeto removido em {s} s",
   "obj.err": "Falha ao remover o objeto: {err}",
 
+  // Fase compartilhada pelos dois modais de IA: o modelo já está no disco,
+  // mas a sessão ainda está sendo montada (208 MB de pesos parseados pelo
+  // wasm no caso do LaMa). Dizer isso evita que o usuário leia a demora
+  // inicial como "travou".
+  "ai.loading": "Carregando o modelo na memória… (só na primeira vez)",
+
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",
   "refine.erase": "Apagar",
@@ -326,6 +332,8 @@ const en: Record<MessageKey, string> = {
   "obj.done": "Object removed in {s} s",
   "obj.err": "Failed to remove the object: {err}",
 
+  "ai.loading": "Loading the model into memory… (first time only)",
+
   "refine.title": "Refine cutout",
   "refine.restore": "Restore",
   "refine.erase": "Erase",
@@ -500,6 +508,8 @@ const es: Record<MessageKey, string> = {
   "obj.running": "Quitando el objeto… tarda unos segundos (la primera vez, un poco más para cargar el modelo).",
   "obj.done": "Objeto quitado en {s} s",
   "obj.err": "Error al quitar el objeto: {err}",
+
+  "ai.loading": "Cargando el modelo en memoria… (solo la primera vez)",
 
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",
