@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
@@ -16,8 +17,19 @@ import TextModal from "./components/TextModal";
 import Toasts from "./components/Toasts";
 import Toolbar from "./components/Toolbar";
 import { t } from "./lib/i18n";
-import { exportFlat, openPath, pickAndOpen, saveDoc, type ExportFormat } from "./lib/io";
+import {
+  addImageLayerFromPath,
+  exportFlat,
+  isImagePath,
+  openPath,
+  pasteImageAsLayer,
+  pickAndAddImageLayer,
+  pickAndOpen,
+  saveDoc,
+  type ExportFormat,
+} from "./lib/io";
 import { useDoc } from "./state/doc";
+import { useRefine } from "./state/refine";
 import { useSelection } from "./state/selection";
 import { useTools } from "./state/tools";
 import { useUi } from "./state/ui";
@@ -36,6 +48,9 @@ export default function App() {
   const selRect = useSelection((s) => s.rect);
   const textAt = useTools((s) => s.textAt);
   const selFloating = useSelection((s) => s.floating);
+  // Modo Refinar vivo = o canvas da camada está emprestado pro preview:
+  // salvar/exportar/desfazer/nova remoção ficam bloqueados até aplicar/cancelar.
+  const refineActive = useRefine((s) => s.active);
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -65,6 +80,14 @@ export default function App() {
       }
     } catch (e) {
       pushToast("error", t("io.saveErr", { err: String(e instanceof Error ? e.message : e) }));
+    }
+  };
+
+  const doAddImage = async () => {
+    try {
+      await pickAndAddImageLayer();
+    } catch (e) {
+      pushToast("error", t("io.openErr", { err: String(e instanceof Error ? e.message : e) }));
     }
   };
 
@@ -103,6 +126,30 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Arrastar arquivo pra janela: com doc aberto, imagem vira CAMADA (o mesmo
+  // caminho do botão "Adicionar imagem"); sem doc, abre o arquivo (inclusive
+  // .tpaint). Evento do Tauri — em navegador puro (dev/smoke) não existe.
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window)) return;
+    const un = getCurrentWebview().onDragDropEvent((ev) => {
+      if (ev.payload.type !== "drop") return;
+      const paths = ev.payload.paths;
+      void (async () => {
+        for (const path of paths) {
+          try {
+            if (!useDoc.getState().open) await openPath(path);
+            else if (isImagePath(path)) await addImageLayerFromPath(path);
+          } catch (e) {
+            useUi.getState().pushToast("error", t("io.openErr", { err: String(e instanceof Error ? e.message : e) }));
+          }
+        }
+      })();
+    });
+    return () => {
+      void un.then((f) => f());
+    };
+  }, []);
+
   // Fechar a janela com alterações: pergunta. (`onCloseRequested` + destroy —
   // exige `core:window:allow-destroy` na capability, gotcha da suíte.)
   useEffect(() => {
@@ -126,6 +173,23 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       const tgt = e.target as HTMLElement;
       if (tgt instanceof HTMLInputElement || tgt instanceof HTMLTextAreaElement || tgt.isContentEditable) return;
+
+      // Modo Refinar: Enter aplica, Esc cancela; o resto do teclado que mexe
+      // em pixels/histórico fica bloqueado (o canvas da camada é o preview).
+      // Ajustar pincel ([ ]) segue liberado — cai no mapa lá embaixo.
+      const refine = useRefine.getState();
+      if (refine.active) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          refine.apply();
+          return;
+        }
+        if (e.key === "Escape") {
+          refine.cancel();
+          return;
+        }
+        if (e.key === "Delete" || e.key === "Backspace" || e.ctrlKey || e.metaKey) return;
+      }
 
       if (e.key === "Escape") {
         useSelection.getState().deselect();
@@ -153,6 +217,15 @@ export default function App() {
         if (k === "d") {
           e.preventDefault();
           useSelection.getState().deselect();
+          return;
+        }
+        if (k === "v") {
+          // Colar imagem como camada (bônus da fatia ①). Sem imagem no
+          // clipboard (ou leitura negada pelo WebView) avisa e segue.
+          e.preventDefault();
+          void pasteImageAsLayer().then((ok) => {
+            if (!ok && useDoc.getState().open) useUi.getState().pushToast("info", t("io.pasteNoImage"));
+          });
           return;
         }
         if (k === "z" && !e.shiftKey) {
@@ -223,28 +296,31 @@ export default function App() {
           <button onClick={() => void doOpen()}>
             <Icon name="folder" /> {t("top.open")}
           </button>
-          <button disabled={!open} onClick={() => void doSave(false)}>
+          <button disabled={!open || refineActive} title={t("top.addImageTip")} onClick={() => void doAddImage()}>
+            <Icon name="image" /> {t("top.addImage")}
+          </button>
+          <button disabled={!open || refineActive} onClick={() => void doSave(false)}>
             <Icon name="save" /> {t("top.save")}
           </button>
-          <button disabled={!open} onClick={() => void doSave(true)}>
+          <button disabled={!open || refineActive} onClick={() => void doSave(true)}>
             {t("top.saveAs")}
           </button>
-          <button disabled={!open} onClick={() => setExportOpen(true)}>
+          <button disabled={!open || refineActive} onClick={() => setExportOpen(true)}>
             <Icon name="export" /> {t("top.export")}
           </button>
-          <button disabled={!open} onClick={() => setFiltersOpen(true)}>
+          <button disabled={!open || refineActive} onClick={() => setFiltersOpen(true)}>
             <Icon name="sliders" /> {t("top.filters")}
           </button>
-          <button disabled={!open} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
+          <button disabled={!open || refineActive} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
             <Icon name="scissors" /> {t("top.removeBg")}
           </button>
         </div>
 
         <div className="topbar-group">
-          <button disabled={!canUndo} title={t("top.undo")} onClick={undo}>
+          <button disabled={!canUndo || refineActive} title={t("top.undo")} onClick={undo}>
             <Icon name="undo" />
           </button>
-          <button disabled={!canRedo} title={t("top.redo")} onClick={redo}>
+          <button disabled={!canRedo || refineActive} title={t("top.redo")} onClick={redo}>
             <Icon name="redo" />
           </button>
           <button disabled={!open} title={t("zoom.fit")} onClick={() => requestZoom("fit")}>
@@ -259,6 +335,20 @@ export default function App() {
             onClick={() => useSelection.getState().invert()}
           >
             <Icon name="invert" />
+          </button>
+          <button
+            disabled={!selRect || selFloating}
+            title={t("sel.expand")}
+            onClick={() => useSelection.getState().expand(1)}
+          >
+            <Icon name="selExpand" />
+          </button>
+          <button
+            disabled={!selRect || selFloating}
+            title={t("sel.contract")}
+            onClick={() => useSelection.getState().contract(1)}
+          >
+            <Icon name="selContract" />
           </button>
           <button
             disabled={!selRect || selFloating}

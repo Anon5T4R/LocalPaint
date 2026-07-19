@@ -31,7 +31,7 @@ import * as ort from "onnxruntime-web/wasm";
 import ortMjsUrl from "onnxruntime-web/ort-wasm-simd-threaded.mjs?url";
 import ortWasmUrl from "onnxruntime-web/ort-wasm-simd-threaded.wasm?url";
 
-import { applyMaskAlpha, saliencyToAlpha, toIsnetInput } from "./matte";
+import { saliencyToAlpha, toIsnetInput } from "./matte";
 
 ort.env.wasm.wasmPaths = { mjs: ortMjsUrl, wasm: ortWasmUrl };
 ort.env.wasm.numThreads = 1;
@@ -90,9 +90,17 @@ function ensureSession(path: string): Promise<ort.InferenceSession> {
   return sessionPromise;
 }
 
-/** Roda o isnet na imagem do canvas e devolve um ImageData NOVO (mesmo
- *  tamanho) com o fundo transparente. Não toca no canvas de entrada. */
-export async function removeBackground(canvas: HTMLCanvasElement): Promise<ImageData> {
+export interface BgRemoveResult {
+  /** Pixels ORIGINAIS da camada, intocados — o modo Refinar precisa deles. */
+  original: ImageData;
+  /** Máscara 0–255 em resolução cheia (convenção matte.ts, alpha contínuo). */
+  mask: Uint8ClampedArray;
+}
+
+/** Roda o isnet na imagem do canvas e devolve `{ original, mask }` — quem
+ *  aplica é o modo Refinar (state/refine.ts): a máscara vira editável antes
+ *  de gravar. Não toca no canvas de entrada. */
+export async function removeBackground(canvas: HTMLCanvasElement): Promise<BgRemoveResult> {
   const path = await modelPath();
   if (!path) throw new Error("modelo ausente"); // a UI garante o download antes
   const session = await ensureSession(path);
@@ -135,10 +143,9 @@ export async function removeBackground(canvas: HTMLCanvasElement): Promise<Image
   sctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
   const scaledMask = sctx.getImageData(0, 0, canvas.width, canvas.height);
 
-  // 4. Aplica como alpha numa CÓPIA dos pixels originais (resolução cheia).
-  const result = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
+  // 4. Devolve os originais + a máscara em resolução cheia (um byte por px).
+  const original = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
   const mask = new Uint8ClampedArray(scaledMask.data.length >> 2);
   for (let i = 0; i < mask.length; i++) mask[i] = scaledMask.data[i * 4 + 3];
-  applyMaskAlpha(result.data, mask);
-  return result;
+  return { original, mask };
 }

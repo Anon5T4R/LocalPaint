@@ -27,7 +27,7 @@ import { create } from "zustand";
 
 import { clampRect, type Rect } from "../lib/geometry";
 import { layerCtx, requestRender } from "../lib/layers";
-import { applyMaskAlpha, clearMasked, invertSel, trimMask, type MaskSel } from "../lib/mask";
+import { applyMaskAlpha, clearMasked, dilateSel, erodeSel, invertSel, trimMask, type MaskSel } from "../lib/mask";
 import { resolveStampTarget } from "../lib/stamp";
 import { useDoc } from "./doc";
 
@@ -55,6 +55,10 @@ interface SelectionState {
   /** Inverte a seleção dentro do doc (Ctrl+Shift+I). Sem seleção = no-op;
    *  seleção cobrindo o doc inteiro = seleção some. */
   invert: () => void;
+  /** Expande a seleção N px (dilatação morfológica, clampada ao doc). */
+  expand: (n: number) => void;
+  /** Contrai a seleção N px (erosão). Contrair até sumir limpa a seleção. */
+  contract: (n: number) => void;
   /** Levanta os pixels da camada ativa pro flutuante (início do arrasto).
    *  Com máscara: copia SÓ os pixels onde mask=1 e limpa SÓ eles na origem. */
   lift: () => void;
@@ -122,6 +126,23 @@ export const useSelection = create<SelectionState>((set, get) => ({
     if (!rect || !doc.open) return;
     const inv = invertSel({ bounds: rect, mask }, doc.width, doc.height);
     set(inv ? { rect: inv.bounds, mask: inv.mask } : { rect: null, mask: null });
+    requestRender();
+  },
+
+  expand: (n) => {
+    const { rect, mask, floating } = get();
+    const doc = useDoc.getState();
+    if (!rect || floating || !doc.open) return;
+    const d = dilateSel({ bounds: rect, mask }, doc.width, doc.height, n);
+    set({ rect: d.bounds, mask: d.mask });
+    requestRender();
+  },
+
+  contract: (n) => {
+    const { rect, mask, floating } = get();
+    if (!rect || floating) return;
+    const e = erodeSel({ bounds: rect, mask }, n);
+    set(e ? { rect: e.bounds, mask: e.mask } : { rect: null, mask: null });
     requestRender();
   },
 

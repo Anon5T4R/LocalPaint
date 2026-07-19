@@ -36,7 +36,10 @@ export type IconName =
   | "invert"
   | "crop"
   | "text"
-  | "scissors";
+  | "scissors"
+  | "image"
+  | "selExpand"
+  | "selContract";
 
 const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   pencil: { d: "M3 21l1-4L16 5l3 3L7 20l-4 1zM14.5 6.5l3 3" },
@@ -72,6 +75,9 @@ const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   crop: { d: "M7 3v14h14M3 7h14v14" },
   text: { d: "M5 6V4h14v2M12 4v16M9 20h6" },
   scissors: { d: "M6 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM20 4L8.1 15.9M14.7 14.7L20 20M8.1 8.1L12 12" },
+  image: { d: "M4 5h16v14H4zM8.5 9.5a1 1 0 1 0 .01 0M4 16l5-5 4 4 3-3 4 4" },
+  selExpand: { d: "M12 10V3M9 6l3-3 3 3M12 14v7M9 18l3 3 3-3M10 12H3M6 9l-3 3 3 3M14 12h7M18 9l3 3-3 3" },
+  selContract: { d: "M12 4v6M9 7l3 3 3-3M12 20v-6M9 17l3-3 3 3M4 12h6M7 9l3 3-3 3M20 12h-6M17 9l-3 3 3 3" },
 };
 
 export default function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {

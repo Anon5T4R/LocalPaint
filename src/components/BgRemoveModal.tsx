@@ -3,8 +3,9 @@ import { listen } from "@tauri-apps/api/event";
 
 import { fetchModel, MODEL_BYTES, modelPath, removeBackground } from "../lib/bgremove";
 import { t } from "../lib/i18n";
-import { getLayerCanvas, layerCtx, requestRender } from "../lib/layers";
+import { getLayerCanvas } from "../lib/layers";
 import { useDoc } from "../state/doc";
+import { useRefine } from "../state/refine";
 import { useUi } from "../state/ui";
 
 interface Props {
@@ -20,9 +21,9 @@ const mb = (n: number) => Math.round(n / MB);
 /** Fluxo da remoção de fundo: com o modelo no disco, roda direto (o modal só
  *  mostra "removendo…"); sem ele, explica o download (~170 MB, uma vez, tudo
  *  local depois) e mostra o progresso do evento `model-progress`. O resultado
- *  entra na camada ativa com undo de camada inteira — o mesmo before/after do
- *  `applyToActiveLayer` do FiltersModal, mas sempre a camada toda: a máscara
- *  vem do conteúdo inteiro, não faria sentido em recorte de seleção. */
+ *  NÃO é aplicado aqui: a inferência devolve `{ original, mask }` e o app
+ *  entra no modo REFINAR (state/refine.ts) — pincel restaura/apaga a máscara,
+ *  Enter aplica com UM undo, Esc cancela sem tocar a camada. */
 export default function BgRemoveModal({ open, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("checking");
   const [progress, setProgress] = useState<{ got: number; total: number | null } | null>(null);
@@ -42,21 +43,11 @@ export default function BgRemoveModal({ open, onClose }: Props) {
       const layerId = s.activeId;
       const canvas = layerId ? getLayerCanvas(layerId) : undefined;
       if (!layerId || !canvas) throw new Error("no layer");
-      const { width, height } = s;
 
-      const ctx = layerCtx(layerId);
-      const before = new Uint8ClampedArray(ctx.getImageData(0, 0, width, height).data);
-      const result = await removeBackground(canvas);
-      ctx.putImageData(result, 0, 0);
-      const after = new Uint8ClampedArray(result.data);
-      s.pushHistory({
-        label: "bgremove",
-        bytes: before.byteLength * 2,
-        undo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(before), width, height), 0, 0),
-        redo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(after), width, height), 0, 0),
-      });
-      requestRender();
-      pushToast("ok", t("bg.done"));
+      const { original, mask } = await removeBackground(canvas);
+      // Nada de histórico aqui — o Aplicar do modo Refinar grava o undo único.
+      useRefine.getState().start(layerId, original, mask);
+      pushToast("ok", t("bg.refineStart"));
       onClose();
     } catch (e) {
       fail(e);

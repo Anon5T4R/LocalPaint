@@ -47,6 +47,12 @@ interface DocState {
   adoptDoc: (w: number, h: number, layers: LayerMeta[], filePath: string | null) => void;
 
   addLayer: () => void;
+  /** Camada nova ACIMA da ativa com a imagem desenhada em (0,0) — a fatia ①
+   *  "adicionar imagem como camada". Sem redimensionar: imagem maior que o
+   *  doc fica cortada (centralizar/escalar é refinamento futuro anotado). */
+  /** Devolve `true` quando a imagem precisou ser REDUZIDA pra caber no doc —
+   *  quem chama avisa o usuário (encolher calado é perder pixel sem contar). */
+  addImageLayer: (img: CanvasImageSource, name: string) => boolean;
   removeLayer: (id: string) => void;
   duplicateLayer: (id: string) => void;
   moveLayer: (id: string, dir: 1 | -1) => void;
@@ -170,6 +176,57 @@ export const useDoc = create<DocState>((set, get) => ({
       },
     });
     requestRender();
+  },
+
+  addImageLayer: (img, name) => {
+    const { layers, width, height, activeId, open } = get();
+    if (!open) return false;
+    const meta = newLayerMeta(name);
+    createLayerCanvas(meta.id, width, height);
+    // CENTRADO e reduzido pra caber. Desenhar em (0,0) no tamanho original
+    // parece inofensivo e não é: uma foto maior que o doc seria CORTADA no canto
+    // superior esquerdo — o usuário importa 4000 px num doc de 800 e recebe um
+    // pedaço, sem aviso nenhum. Só encolhe (`min(1, …)`): ampliar uma imagem
+    // pequena pra preencher o doc borraria pixel que o usuário não pediu.
+    const iw = "width" in img ? Number(img.width) : width;
+    const ih = "height" in img ? Number(img.height) : height;
+    const fit = Math.min(1, width / iw, height / ih);
+    const dw = Math.round(iw * fit);
+    const dh = Math.round(ih * fit);
+    layerCtx(meta.id).drawImage(img, Math.round((width - dw) / 2), Math.round((height - dh) / 2), dw, dh);
+    const scaled = fit < 1;
+    // Snapshot pro redo, padrão duplicateLayer: o CONTEÚDO tem que voltar —
+    // refazer "adicionar imagem" sem os pixels seria uma camada vazia.
+    const snap = layerCtx(meta.id).getImageData(0, 0, width, height);
+
+    const at = activeId ? layers.findIndex((l) => l.id === activeId) + 1 : layers.length;
+    const prevActive = activeId;
+    const next = [...layers.slice(0, at), meta, ...layers.slice(at)];
+    set({ layers: next, activeId: meta.id, ...flags() });
+
+    get().pushHistory({
+      label: "addImageLayer",
+      bytes: snap.data.byteLength,
+      undo: () => {
+        dropLayerCanvas(meta.id);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: s.layers.filter((l) => l.id !== meta.id),
+          activeId: s.activeId === meta.id ? (prevActive ?? (s.layers[at - 1]?.id ?? null)) : s.activeId,
+        });
+      },
+      redo: () => {
+        createLayerCanvas(meta.id, width, height);
+        layerCtx(meta.id).putImageData(snap, 0, 0);
+        const s = useDoc.getState();
+        useDoc.setState({
+          layers: [...s.layers.slice(0, at), meta, ...s.layers.slice(at)],
+          activeId: meta.id,
+        });
+      },
+    });
+    requestRender();
+    return scaled;
   },
 
   removeLayer: (id) => {

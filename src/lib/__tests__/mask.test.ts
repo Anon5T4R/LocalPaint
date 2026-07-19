@@ -6,6 +6,8 @@ import {
   applyMaskAlpha,
   clearMasked,
   countMask,
+  dilateSel,
+  erodeSel,
   invertSel,
   maskOutline,
   maskRunRects,
@@ -188,6 +190,63 @@ describe("maskRunRects (o clip da pintura)", () => {
       for (let y = r.y; y < r.y + r.h; y++)
         for (let x = r.x; x < r.x + r.w; x++) back[y * w + x] = 1;
     expect([...back]).toEqual([...mask]);
+  });
+});
+
+describe("dilateSel / erodeSel (expandir/contrair da fatia ②)", () => {
+  it("1 pixel dilatado 1× vira 3×3 cheio (elemento 3×3 = vizinhança-8)", () => {
+    const d = dilateSel({ bounds: B(5, 5, 1, 1), mask: null }, 20, 20, 1);
+    expect(d.bounds).toEqual(B(4, 4, 3, 3));
+    expect(d.mask).toBeNull(); // 3×3 cheio degenera pro fast path
+  });
+
+  it("N iterações = N px: 1 pixel dilatado 2× vira 5×5 (25 px)", () => {
+    const d = dilateSel({ bounds: B(10, 10, 1, 1), mask: null }, 30, 30, 2);
+    expect(d.bounds).toEqual(B(8, 8, 5, 5));
+    expect(d.mask).toBeNull();
+  });
+
+  it("dilatar clampa na borda do doc (cresce além do bounds, nunca do doc)", () => {
+    const d = dilateSel({ bounds: B(0, 0, 1, 1), mask: null }, 4, 4, 1);
+    expect(d.bounds).toEqual(B(0, 0, 2, 2));
+    expect(d.mask).toBeNull();
+    expect(countMask(d.mask ?? rectMask(d.bounds.w, d.bounds.h))).toBe(4);
+  });
+
+  it("dilatar máscara diagonal conecta os pixels (fecha o vão)", () => {
+    const sel: MaskSel = { bounds: B(2, 2, 2, 2), mask: m(["#.", ".#"]).mask };
+    const d = dilateSel(sel, 10, 10, 1);
+    expect(d.bounds).toEqual(B(1, 1, 4, 4));
+    // Cada pixel vira 3×3; os dois quadrados se sobrepõem em 2×2 → 9+9−4 = 14.
+    expect(countMask(d.mask!)).toBe(14);
+  });
+
+  it("contrair retângulo 4×4 em 1 vira retângulo 2×2 (trim degenera)", () => {
+    const e = erodeSel({ bounds: B(3, 3, 4, 4), mask: null }, 1)!;
+    expect(e.bounds).toEqual(B(4, 4, 2, 2));
+    expect(e.mask).toBeNull();
+  });
+
+  it("cruz de 5 px contraída 1× some INTEIRA (o kernel é 3×3 quadrado)", () => {
+    // O centro da cruz tem as quatro DIAGONAIS desligadas, e o elemento
+    // estruturante é o quadrado 3×3 (AND horizontal + AND vertical, separável em
+    // morph3x3) — não a vizinhança-4. Então nem o centro sobrevive: some tudo.
+    // Isto é o comportamento canônico de erosão e o mesmo que o docstring do
+    // erodeSel promete ("istmo fino pode se partir"); esperar o centro vivo
+    // seria pedir um kernel em cruz, que não é o que a fatia ② implementa.
+    const sel: MaskSel = { bounds: B(0, 0, 3, 3), mask: m([".#.", "###", ".#."]).mask };
+    expect(erodeSel(sel, 1)).toBeNull();
+  });
+
+  it("contrair até sumir devolve null (a seleção deixa de existir)", () => {
+    expect(erodeSel({ bounds: B(0, 0, 2, 2), mask: null }, 1)).toBeNull();
+  });
+
+  it("dilatar e contrair N são inversos num retângulo longe das bordas", () => {
+    const orig: MaskSel = { bounds: B(10, 10, 5, 4), mask: null };
+    const round = erodeSel(dilateSel(orig, 40, 40, 3), 3)!;
+    expect(round.bounds).toEqual(orig.bounds);
+    expect(round.mask).toBeNull();
   });
 });
 

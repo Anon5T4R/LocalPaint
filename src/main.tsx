@@ -21,13 +21,15 @@ if (import.meta.env.DEV) {
     import("./state/tools"),
     import("./lib/layers"),
     import("./state/selection"),
+    import("./state/refine"),
   ]).then(
-    ([d, tl, ly, sl]) => {
+    ([d, tl, ly, sl, rf]) => {
       (window as unknown as Record<string, unknown>).__lp = {
         doc: d.useDoc,
         tools: tl.useTools,
         layers: ly,
         selection: sl.useSelection,
+        refine: rf.useRefine,
         // Prova do backend do ORT sem precisar do modelo (ver bgremove.ts).
         ortSelfTest: () => import("./lib/bgremove").then((m) => m.ortSelfTest()),
       };

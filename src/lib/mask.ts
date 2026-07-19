@@ -214,6 +214,75 @@ export function maskRunRects(mask: Uint8Array, w: number, h: number): Rect[] {
   return out;
 }
 
+/** Uma passada 3×3 (separável: 1×3 depois 3×1) de dilatação OU erosão, N
+ *  iterações = N px. Fora do buffer conta como 0 — na dilatação isso é neutro
+ *  (OR com 0), na erosão significa que a borda do buffer ERODE (contrair uma
+ *  seleção encostada na borda do doc a puxa pra dentro; documentado no teste). */
+function morph3x3(mask: Uint8Array, w: number, h: number, dilate: boolean, iterations: number): Uint8Array {
+  let cur = new Uint8Array(mask);
+  let out = new Uint8Array(w * h);
+  const tmp = new Uint8Array(w * h);
+  for (let it = 0; it < iterations; it++) {
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const l = x > 0 ? cur[row + x - 1] : 0;
+        const c = cur[row + x];
+        const r = x < w - 1 ? cur[row + x + 1] : 0;
+        tmp[row + x] = dilate ? l | c | r : l & c & r;
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      const up = y > 0 ? row - w : -1;
+      const dn = y < h - 1 ? row + w : -1;
+      for (let x = 0; x < w; x++) {
+        const u = up >= 0 ? tmp[up + x] : 0;
+        const c = tmp[row + x];
+        const d = dn >= 0 ? tmp[dn + x] : 0;
+        out[row + x] = dilate ? u | c | d : u & c & d;
+      }
+    }
+    [cur, out] = [out, cur];
+  }
+  return cur;
+}
+
+/** Expande a seleção N px (dilatação 3×3 iterada). O bounds cresce N pra cada
+ *  lado — a máscara PODE crescer além do bounds original — clampado ao doc.
+ *  Retângulo (mask null) continua retângulo; o trim decide (fast path). */
+export function dilateSel(sel: MaskSel, docW: number, docH: number, n: number): MaskSel {
+  if (n <= 0) return sel;
+  const bx = Math.max(0, sel.bounds.x - n);
+  const by = Math.max(0, sel.bounds.y - n);
+  const bx2 = Math.min(docW, sel.bounds.x + sel.bounds.w + n);
+  const by2 = Math.min(docH, sel.bounds.y + sel.bounds.h + n);
+  const w = bx2 - bx;
+  const h = by2 - by;
+  const buf = new Uint8Array(w * h);
+  const ox = sel.bounds.x - bx;
+  const oy = sel.bounds.y - by;
+  for (let y = 0; y < sel.bounds.h; y++) {
+    const src = y * sel.bounds.w;
+    const dst = (oy + y) * w + ox;
+    for (let x = 0; x < sel.bounds.w; x++) {
+      if (!sel.mask || sel.mask[src + x]) buf[dst + x] = 1;
+    }
+  }
+  // Não-vazia por invariante (dilatar nunca apaga) — o ! é seguro.
+  return trimMask({ x: bx, y: by, w, h }, morph3x3(buf, w, h, true, n))!;
+}
+
+/** Contrai a seleção N px (erosão 3×3 iterada). Devolve null quando a seleção
+ *  some inteira. Retângulo contraído vira retângulo menor (trim degenera);
+ *  máscara com istmo fino pode se partir — comportamento canônico de erosão. */
+export function erodeSel(sel: MaskSel, n: number): MaskSel | null {
+  if (n <= 0) return sel;
+  const { w, h } = sel.bounds;
+  const src = sel.mask ?? rectMask(w, h);
+  return trimMask(sel.bounds, morph3x3(src, w, h, false, n));
+}
+
 /** Quantos pixels a máscara liga — pros testes e pra decidir "cobriu tudo". */
 export function countMask(mask: Uint8Array): number {
   let n = 0;

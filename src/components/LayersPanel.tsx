@@ -2,9 +2,11 @@ import { useState } from "react";
 
 import Icon from "./Icon";
 import { t } from "../lib/i18n";
+import { pickAndAddImageLayer } from "../lib/io";
 import { BLEND_MODES, type BlendMode } from "../lib/model";
 import { useDoc } from "../state/doc";
 import { useSelection } from "../state/selection";
+import { useUi } from "../state/ui";
 
 /** Painel de camadas — a lista é DE CIMA PRA BAIXO na tela (a camada do topo
  *  da lista é a que cobre as outras), então renderiza o array invertido.
@@ -43,6 +45,17 @@ export default function LayersPanel() {
         <div className="panel-actions">
           <button className="icon-btn" title={t("layers.add")} onClick={addLayer}>
             <Icon name="plus" />
+          </button>
+          <button
+            className="icon-btn"
+            title={t("top.addImageTip")}
+            onClick={() => {
+              pickAndAddImageLayer().catch((e) =>
+                useUi.getState().pushToast("error", t("io.openErr", { err: String(e instanceof Error ? e.message : e) })),
+              );
+            }}
+          >
+            <Icon name="image" />
           </button>
           <button
             className="icon-btn"

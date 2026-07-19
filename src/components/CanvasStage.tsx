@@ -30,8 +30,10 @@ import type { HistoryEntry } from "../lib/history";
 import { getLayerCanvas, layerCtx, onRender, requestRender } from "../lib/layers";
 import { compositeInto } from "../lib/compose";
 import { useDoc } from "../state/doc";
+import { getVeilCanvas, useRefine } from "../state/refine";
 import { getFloatingCanvas, useSelection } from "../state/selection";
 import { useTools, type Tool } from "../state/tools";
+import RefineBar from "./RefineBar";
 
 interface View {
   scale: number;
@@ -87,6 +89,8 @@ export default function CanvasStage() {
   // Gesto da ferramenta de seleção: marquee em criação OU arrasto do recorte.
   const marquee = useRef<{ x0: number; y0: number } | null>(null);
   const selDrag = useRef<{ lastX: number; lastY: number; lifted: boolean } | null>(null);
+  // Traço do modo REFINAR (pinta a MÁSCARA da remoção de fundo, não a camada).
+  const refineDrag = useRef<{ erase: boolean; last: { x: number; y: number } } | null>(null);
   // Path2Ds da seleção MASCARADA, cacheados pela identidade da máscara (ela é
   // imutável por seleção): `outline` = contorno de verdade das marching ants;
   // `clip` = retângulos dos runs (fill nonzero) pro clip da pintura. Coords
@@ -166,6 +170,13 @@ export default function CanvasStage() {
         if (fc) ctx.drawImage(fc, sel.rect.x, sel.rect.y);
       }
 
+      // Véu do modo Refinar: vermelho translúcido onde a máscara removeu.
+      const refine = useRefine.getState();
+      if (refine.active && refine.veil) {
+        const vc = getVeilCanvas();
+        if (vc) ctx.drawImage(vc, 0, 0);
+      }
+
       // Preview de forma por cima (em coordenadas de doc).
       const sp = shape.current;
       if (sp) {
@@ -206,10 +217,11 @@ export default function CanvasStage() {
         ctx.restore();
       }
 
-      // Cursor de pincel (círculo do diâmetro real) — em px de tela.
+      // Cursor de pincel (círculo do diâmetro real) — em px de tela. No modo
+      // Refinar o círculo aparece SEMPRE (a ferramenta ativa é irrelevante lá).
       const m = mouse.current;
       const tool = useTools.getState().tool;
-      if (m && (tool === "brush" || tool === "eraser" || tool === "pencil")) {
+      if (m && (refine.active || tool === "brush" || tool === "eraser" || tool === "pencil")) {
         const d = useTools.getState().size * v.scale;
         ctx.strokeStyle = "rgba(0,0,0,.7)";
         ctx.lineWidth = 1;
@@ -232,11 +244,13 @@ export default function CanvasStage() {
 
     const un1 = useDoc.subscribe(() => requestRender());
     const un2 = useTools.subscribe(() => requestRender());
+    const un3 = useRefine.subscribe(() => requestRender());
     const ro = new ResizeObserver(() => requestRender());
     if (hostRef.current) ro.observe(hostRef.current);
     return () => {
       un1();
       un2();
+      un3();
       ro.disconnect();
     };
   }, []);
@@ -433,6 +447,17 @@ export default function CanvasStage() {
     const tools = useTools.getState();
     const p = toDoc(e);
 
+    // Modo REFINAR captura o gesto inteiro: qualquer ferramenta vira o pincel
+    // de máscara. Botão direito inverte o modo na hora (restaurar ⇄ apagar).
+    const refine = useRefine.getState();
+    if (refine.active) {
+      const erase = (refine.mode === "erase") !== (e.button === 2);
+      const radius = Math.max(0.5, tools.size / 2);
+      refine.paintAt(p.x, p.y, radius, erase);
+      refineDrag.current = { erase, last: { x: p.x, y: p.y } };
+      return;
+    }
+
     if (tools.tool === "eyedropper") {
       pickColor(p.x, p.y, e.button === 2);
       return;
@@ -580,6 +605,28 @@ export default function CanvasStage() {
       return;
     }
 
+    if (refineDrag.current) {
+      // Interpola o traço em passos de meio raio — pointermove esparso não
+      // pode deixar buracos no restauro (não há coalesced pra máscara aqui:
+      // dabs são caros, meio raio é denso o bastante e limita o custo).
+      const p = toDoc(e);
+      const d = refineDrag.current;
+      const radius = Math.max(0.5, useTools.getState().size / 2);
+      const dist = Math.hypot(p.x - d.last.x, p.y - d.last.y);
+      const steps = Math.max(1, Math.ceil(dist / Math.max(1, radius / 2)));
+      const refine = useRefine.getState();
+      for (let i = 1; i <= steps; i++) {
+        refine.paintAt(
+          d.last.x + ((p.x - d.last.x) * i) / steps,
+          d.last.y + ((p.y - d.last.y) * i) / steps,
+          radius,
+          d.erase,
+        );
+      }
+      d.last = { x: p.x, y: p.y };
+      return;
+    }
+
     if (marquee.current) {
       const p = toDoc(e);
       const m = marquee.current;
@@ -638,6 +685,11 @@ export default function CanvasStage() {
   function onPointerUp(e: React.PointerEvent) {
     if (panning.current) {
       panning.current = null;
+      return;
+    }
+    if (refineDrag.current) {
+      refineDrag.current = null;
+      useRefine.getState().endStroke();
       return;
     }
     if (marquee.current || selDrag.current) {
@@ -793,6 +845,7 @@ export default function CanvasStage() {
         onWheel={onWheel}
         onContextMenu={(e) => e.preventDefault()}
       />
+      <RefineBar />
     </div>
   );
 }

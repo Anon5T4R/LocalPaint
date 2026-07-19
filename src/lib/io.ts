@@ -15,6 +15,7 @@ import { bumpIdsPast, newLayerMeta, type LayerMeta } from "./model";
 import { parseTpaint, serializeTpaint } from "./tpaint";
 import { t } from "./i18n";
 import { useDoc } from "../state/doc";
+import { useUi } from "../state/ui";
 
 // ── bytes ↔ base64 (a ponte com o Rust) ─────────────────────────────────────
 
@@ -111,6 +112,64 @@ async function openFlatImage(path: string): Promise<void> {
   // Imagem achatada NÃO vira o filePath do doc: salvar de novo é Save As —
   // sobrescrever o PNG do usuário com um .tpaint seria surpresa das ruins.
   useDoc.getState().adoptDoc(w, h, [meta], null);
+}
+
+// ── adicionar imagem como camada (fatia ①) ─────────────────────────────────
+
+const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "bmp", "gif"];
+
+/** true se o caminho parece um arquivo de imagem que sabemos decodificar. */
+export function isImagePath(path: string): boolean {
+  return new RegExp(`\\.(${IMAGE_EXTS.join("|")})$`, "i").test(path);
+}
+
+/** Diálogo de abrir → arquivo vira CAMADA nova acima da ativa (não troca o
+ *  doc). Reusa o filtro de imagens do abrir normal. */
+export async function pickAndAddImageLayer(): Promise<void> {
+  const path = await openDialog({
+    multiple: false,
+    filters: [{ name: t("io.filterImages"), extensions: IMAGE_EXTS }],
+  });
+  if (typeof path !== "string") return;
+  await addImageLayerFromPath(path);
+}
+
+/** O mesmo caminho serve o diálogo, o arrastar-e-soltar e (via bitmap) o
+ *  colar: uma função, três entradas — como pede a análise §4.4. */
+export async function addImageLayerFromPath(path: string): Promise<void> {
+  const bytes = await readFile(path);
+  let bmp: ImageBitmap;
+  try {
+    bmp = await createImageBitmap(new Blob([bytes.slice().buffer]));
+  } catch {
+    throw new Error(t("io.badImage"));
+  }
+  const scaled = useDoc.getState().addImageLayer(bmp, path.replace(/^.*[\\/]/, ""));
+  if (scaled) useUi.getState().pushToast("info", t("io.imageScaled"));
+  bmp.close();
+}
+
+/** Ctrl+V: primeira imagem da área de transferência vira camada. Devolve
+ *  false quando não havia imagem (ou o WebView negou a leitura — o try/catch
+ *  cobre; sem permissão não há o que colar). */
+export async function pasteImageAsLayer(): Promise<boolean> {
+  if (!useDoc.getState().open) return false;
+  let items: ClipboardItems;
+  try {
+    items = await navigator.clipboard.read();
+  } catch {
+    return false;
+  }
+  for (const it of items) {
+    const type = it.types.find((tp) => tp.startsWith("image/"));
+    if (!type) continue;
+    const bmp = await createImageBitmap(await it.getType(type));
+    const scaled = useDoc.getState().addImageLayer(bmp, t("layers.pasted"));
+    if (scaled) useUi.getState().pushToast("info", t("io.imageScaled"));
+    bmp.close();
+    return true;
+  }
+  return false;
 }
 
 // ── salvar ──────────────────────────────────────────────────────────────────
