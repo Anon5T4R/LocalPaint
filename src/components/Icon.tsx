@@ -33,7 +33,8 @@ export type IconName =
   | "sliders"
   | "select"
   | "crop"
-  | "text";
+  | "text"
+  | "scissors";
 
 const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   pencil: { d: "M3 21l1-4L16 5l3 3L7 20l-4 1zM14.5 6.5l3 3" },
@@ -66,6 +67,7 @@ const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   select: { d: "M5 5h3M11 5h3M17 5h2v2M19 10v3M19 16v3h-2M14 19h-3M8 19H5v-3M5 13v-3" },
   crop: { d: "M7 3v14h14M3 7h14v14" },
   text: { d: "M5 6V4h14v2M12 4v16M9 20h6" },
+  scissors: { d: "M6 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM20 4L8.1 15.9M14.7 14.7L20 20M8.1 8.1L12 12" },
 };
 
 export default function Icon({ name, size = 16, label }: { name: IconName; size?: number; label?: string }) {

@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ask } from "@tauri-apps/plugin-dialog";
 
+import BgRemoveModal from "./components/BgRemoveModal";
 import CanvasStage, { requestZoom } from "./components/CanvasStage";
 import ColorPanel from "./components/ColorPanel";
 import FiltersModal from "./components/FiltersModal";
@@ -38,6 +39,7 @@ export default function App() {
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [bgOpen, setBgOpen] = useState(false);
 
   /** Ação que descarta o doc atual passa por aqui: pergunta se houver sujeira. */
   const guardUnsaved = async (): Promise<boolean> => {
@@ -225,6 +227,9 @@ export default function App() {
           <button disabled={!open} onClick={() => setFiltersOpen(true)}>
             <Icon name="sliders" /> {t("top.filters")}
           </button>
+          <button disabled={!open} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
+            <Icon name="scissors" /> {t("top.removeBg")}
+          </button>
         </div>
 
         <div className="topbar-group">
@@ -297,6 +302,7 @@ export default function App() {
 
       <NewDocModal open={newOpen} onClose={() => setNewOpen(false)} />
       <FiltersModal open={filtersOpen} onClose={() => setFiltersOpen(false)} />
+      <BgRemoveModal open={bgOpen} onClose={() => setBgOpen(false)} />
       <TextModal at={textAt} onClose={() => useTools.getState().setTextAt(null)} />
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => setExportOpen(false)}>

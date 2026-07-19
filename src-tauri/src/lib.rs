@@ -6,6 +6,7 @@
 //! daqui só move bytes de/para o disco e entrega o argumento de abertura.
 //! É por isso que este arquivo é pequeno e deve continuar pequeno.
 
+mod download;
 mod fsio;
 
 use tauri::Manager;
@@ -49,10 +50,21 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            // O escopo do asset protocol nasce VAZIO; só a pasta de modelos
+            // entra (padrão do LocalVideo). Falhar aqui não derruba o app —
+            // só a remoção de fundo fica indisponível, e ela sabe avisar.
+            if let Err(e) = download::allow_models_dir(app.handle()) {
+                eprintln!("modelos fora do escopo do asset: {e}");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             boot_open_path,
             fsio::read_file_b64,
             fsio::write_file_b64,
+            download::model_fetch,
+            download::model_path,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

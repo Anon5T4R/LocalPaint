@@ -114,6 +114,18 @@ const pt = {
   "filters.apply": "Aplicar",
   "filters.previewNote": "Prévia da camada ativa",
 
+  "top.removeBg": "Remover fundo",
+  "top.removeBgTip": "Remover o fundo da camada ativa (IA local)",
+  "bg.title": "Remover fundo",
+  "bg.checking": "Verificando o modelo…",
+  "bg.needModel":
+    "O recorte usa o modelo isnet-general-use (~{size} MB), baixado uma única vez. Depois disso tudo roda 100% local — nada sai da sua máquina.",
+  "bg.download": "Baixar modelo",
+  "bg.downloading": "Baixando o modelo… {got} de {total} MB",
+  "bg.running": "Removendo o fundo…",
+  "bg.done": "Fundo removido",
+  "bg.err": "Falha ao remover o fundo: {err}",
+
   "dlg.ok": "OK",
   "dlg.cancel": "Cancelar",
   "dlg.unsavedTitle": "Alterações não salvas",
@@ -247,6 +259,18 @@ const en: Record<MessageKey, string> = {
   "filters.apply": "Apply",
   "filters.previewNote": "Active layer preview",
 
+  "top.removeBg": "Remove background",
+  "top.removeBgTip": "Remove the active layer's background (local AI)",
+  "bg.title": "Remove background",
+  "bg.checking": "Checking for the model…",
+  "bg.needModel":
+    "The cutout uses the isnet-general-use model (~{size} MB), downloaded only once. After that everything runs 100% locally — nothing leaves your machine.",
+  "bg.download": "Download model",
+  "bg.downloading": "Downloading the model… {got} of {total} MB",
+  "bg.running": "Removing the background…",
+  "bg.done": "Background removed",
+  "bg.err": "Failed to remove the background: {err}",
+
   "dlg.ok": "OK",
   "dlg.cancel": "Cancel",
   "dlg.unsavedTitle": "Unsaved changes",
@@ -377,6 +401,18 @@ const es: Record<MessageKey, string> = {
   "filters.invert": "Invertir colores",
   "filters.apply": "Aplicar",
   "filters.previewNote": "Vista previa de la capa activa",
+
+  "top.removeBg": "Quitar fondo",
+  "top.removeBgTip": "Quitar el fondo de la capa activa (IA local)",
+  "bg.title": "Quitar fondo",
+  "bg.checking": "Verificando el modelo…",
+  "bg.needModel":
+    "El recorte usa el modelo isnet-general-use (~{size} MB), descargado una sola vez. Después todo corre 100% local — nada sale de tu máquina.",
+  "bg.download": "Descargar modelo",
+  "bg.downloading": "Descargando el modelo… {got} de {total} MB",
+  "bg.running": "Quitando el fondo…",
+  "bg.done": "Fondo quitado",
+  "bg.err": "Error al quitar el fondo: {err}",
 
   "dlg.ok": "OK",
   "dlg.cancel": "Cancelar",

@@ -1,6 +1,6 @@
 [package]
 name = "localpaint"
-version = "0.4.0"
+version = "0.5.0"
 description = "LocalPaint — editor raster 100% offline da suíte Local"
 authors = ["Taylor"]
 edition = "2021"
@@ -17,7 +17,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `protocol-asset`: é o que deixa o front ler o modelo onnx baixado (170 MB)
+# via `convertFileSrc` + fetch — por base64 seriam ~230 MB de string pelo
+# invoke. O escopo nasce vazio; só a pasta de modelos entra (download.rs).
+tauri = { version = "2", features = ["protocol-asset"] }
 # Escolher o que abrir e onde salvar. Sem isto o app só pintaria em memória.
 tauri-plugin-dialog = "2"
 # "Mostrar na pasta" depois de exportar (padrão da suíte).
@@ -28,6 +31,13 @@ serde_json = "1"
 # suíte: "zip sempre no webview"); o Rust só lê e grava o arquivo. Base64 é a
 # ponte — serializar Vec<u8> pelo invoke vira array JSON e multiplica o custo.
 base64 = "0.22"
+# Download do modelo de remoção de fundo (sob demanda — 170 MB não se
+# empacota). rustls e não openssl: sem dependência nativa pra cross-compilar
+# no CI; sem default features pra não arrastar o resto.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+# Verificação do sha256 do modelo baixado ANTES do rename — arquivo corrompido
+# ou adulterado não chega a existir no caminho final.
+sha2 = "0.10"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
