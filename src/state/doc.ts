@@ -52,6 +52,8 @@ interface DocState {
   moveLayer: (id: string, dir: 1 | -1) => void;
   setLayerProps: (id: string, p: Partial<Pick<LayerMeta, "name" | "visible" | "opacity" | "blend">>) => void;
   setActive: (id: string) => void;
+  /** Recorta o DOCUMENTO (todas as camadas) pro retângulo dado. */
+  cropDoc: (r: { x: number; y: number; w: number; h: number }) => void;
 
   pushHistory: (e: HistoryEntry) => void;
   undo: () => void;
@@ -294,6 +296,63 @@ export const useDoc = create<DocState>((set, get) => ({
   },
 
   setActive: (id) => set({ activeId: id }),
+
+  cropDoc: (r) => {
+    const { layers, width, height } = get();
+    if (r.w < 1 || r.h < 1 || (r.x === 0 && r.y === 0 && r.w === width && r.h === height)) return;
+
+    // Recorte muda TODAS as camadas e as dimensões do doc — o undo guarda o
+    // doc inteiro (uma vez; é a operação mais cara do histórico e tudo bem:
+    // o orçamento em bytes expulsa histórico velho se precisar).
+    const snaps = layers.map((l) => ({
+      id: l.id,
+      img: layerCtx(l.id).getImageData(0, 0, width, height),
+    }));
+
+    const apply = (rect: { x: number; y: number; w: number; h: number }) => {
+      for (const l of useDoc.getState().layers) {
+        const c = getLayerCanvas(l.id);
+        if (!c) continue;
+        const cut = layerCtx(l.id).getImageData(rect.x, rect.y, rect.w, rect.h);
+        c.width = rect.w;
+        c.height = rect.h;
+        layerCtx(l.id).putImageData(cut, 0, 0);
+      }
+      useDoc.setState({ width: rect.w, height: rect.h });
+      requestRender();
+    };
+
+    apply(r);
+    set({ ...flags() });
+
+    get().pushHistory({
+      label: "cropDoc",
+      bytes: snaps.reduce((n, s) => n + s.img.data.byteLength, 0),
+      undo: () => {
+        for (const s of snaps) {
+          const c = getLayerCanvas(s.id);
+          if (!c) continue;
+          c.width = width;
+          c.height = height;
+          layerCtx(s.id).putImageData(s.img, 0, 0);
+        }
+        useDoc.setState({ width, height });
+        requestRender();
+      },
+      redo: () => {
+        // Redo recorta de novo a partir do snapshot (a camada atual já está
+        // recortada quando o redo roda depois de um undo — restaura e corta).
+        for (const s of snaps) {
+          const c = getLayerCanvas(s.id);
+          if (!c) continue;
+          c.width = width;
+          c.height = height;
+          layerCtx(s.id).putImageData(s.img, 0, 0);
+        }
+        apply(r);
+      },
+    });
+  },
 
   pushHistory: (e) => {
     hist = push(hist, e);

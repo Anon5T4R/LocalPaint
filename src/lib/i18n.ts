@@ -30,6 +30,9 @@ const pt = {
   "empty.new": "Novo documento",
   "empty.open": "Abrir imagem",
 
+  "tool.select": "Selecionar (M)",
+  "top.crop": "Recortar",
+  "top.cropTip": "Recortar o documento pra seleção",
   "tool.pencil": "Lápis (P)",
   "tool.brush": "Pincel (B)",
   "tool.eraser": "Borracha (E)",
@@ -153,6 +156,9 @@ const en: Record<MessageKey, string> = {
   "empty.new": "New document",
   "empty.open": "Open image",
 
+  "tool.select": "Select (M)",
+  "top.crop": "Crop",
+  "top.cropTip": "Crop the document to the selection",
   "tool.pencil": "Pencil (P)",
   "tool.brush": "Brush (B)",
   "tool.eraser": "Eraser (E)",
@@ -274,6 +280,9 @@ const es: Record<MessageKey, string> = {
   "empty.new": "Documento nuevo",
   "empty.open": "Abrir imagen",
 
+  "tool.select": "Seleccionar (M)",
+  "top.crop": "Recortar",
+  "top.cropTip": "Recortar el documento a la selección",
   "tool.pencil": "Lápiz (P)",
   "tool.brush": "Pincel (B)",
   "tool.eraser": "Borrador (E)",

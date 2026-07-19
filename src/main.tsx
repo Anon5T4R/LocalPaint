@@ -33,7 +33,14 @@ function Root() {
   return <App key={locale} />;
 }
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+// Root REUSADO via globalThis: se o HMR re-executar este entry sem full
+// reload, um segundo createRoot no mesmo container deixaria DUAS árvores de
+// módulos vivas (a UI velha pintando num registro de camadas e a ponte nova
+// lendo outro — lição paga na prova de GUI do v0.1). Reusar o root faz o
+// re-exec virar um render normal na árvore nova.
+const g = globalThis as unknown as { __lpRoot?: ReactDOM.Root };
+g.__lpRoot ??= ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+g.__lpRoot.render(
   <React.StrictMode>
     <Root />
   </React.StrictMode>,

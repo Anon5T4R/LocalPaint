@@ -55,8 +55,16 @@ export function onRender(cb: () => void) {
 export function requestRender() {
   if (pending) return;
   pending = true;
-  requestAnimationFrame(() => {
+  const run = () => {
     pending = false;
     renderCb?.();
-  });
+  };
+  // rAF NÃO dispara com o documento oculto (aba de fundo, janela minimizada
+  // durante automação/testes) — o compositor congelaria e toda prova visual
+  // daria zero. Oculto, cai pro setTimeout no mesmo ritmo; visível, rAF.
+  if (typeof document !== "undefined" && document.hidden) {
+    setTimeout(run, 16);
+  } else {
+    requestAnimationFrame(run);
+  }
 }

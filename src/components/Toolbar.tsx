@@ -2,7 +2,8 @@ import Icon, { type IconName } from "./Icon";
 import { t } from "../lib/i18n";
 import { useTools, type Tool } from "../state/tools";
 
-const TOOLS: { tool: Tool; icon: IconName; key: "tool.pencil" | "tool.brush" | "tool.eraser" | "tool.fill" | "tool.eyedropper" | "tool.line" | "tool.rect" | "tool.ellipse" }[] = [
+const TOOLS: { tool: Tool; icon: IconName; key: "tool.select" | "tool.pencil" | "tool.brush" | "tool.eraser" | "tool.fill" | "tool.eyedropper" | "tool.line" | "tool.rect" | "tool.ellipse" }[] = [
+  { tool: "select", icon: "select", key: "tool.select" },
   { tool: "pencil", icon: "pencil", key: "tool.pencil" },
   { tool: "brush", icon: "brush", key: "tool.brush" },
   { tool: "eraser", icon: "eraser", key: "tool.eraser" },
@@ -24,7 +25,7 @@ export default function Toolbar() {
   const shapeMode = useTools((s) => s.shapeMode);
   const setShapeMode = useTools((s) => s.setShapeMode);
 
-  const showsSize = tool !== "fill" && tool !== "eyedropper";
+  const showsSize = tool !== "fill" && tool !== "eyedropper" && tool !== "select";
   const isShape = tool === "line" || tool === "rect" || tool === "ellipse";
 
   return (

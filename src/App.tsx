@@ -16,6 +16,7 @@ import Toolbar from "./components/Toolbar";
 import { t } from "./lib/i18n";
 import { exportFlat, openPath, pickAndOpen, saveDoc, type ExportFormat } from "./lib/io";
 import { useDoc } from "./state/doc";
+import { useSelection } from "./state/selection";
 import { useTools } from "./state/tools";
 import { useUi } from "./state/ui";
 
@@ -30,6 +31,8 @@ export default function App() {
   const pushToast = useUi((s) => s.pushToast);
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
 
+  const selRect = useSelection((s) => s.rect);
+  const selFloating = useSelection((s) => s.floating);
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -120,8 +123,27 @@ export default function App() {
       const tgt = e.target as HTMLElement;
       if (tgt instanceof HTMLInputElement || tgt instanceof HTMLTextAreaElement || tgt.isContentEditable) return;
 
+      if (e.key === "Escape") {
+        useSelection.getState().deselect();
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        useSelection.getState().deleteContents();
+        return;
+      }
+
       if (e.ctrlKey || e.metaKey) {
         const k = e.key.toLowerCase();
+        if (k === "a") {
+          e.preventDefault();
+          useSelection.getState().selectAll();
+          return;
+        }
+        if (k === "d") {
+          e.preventDefault();
+          useSelection.getState().deselect();
+          return;
+        }
         if (k === "z" && !e.shiftKey) {
           e.preventDefault();
           if (useDoc.getState().canUndo) undo();
@@ -145,6 +167,7 @@ export default function App() {
 
       const tools = useTools.getState();
       const map: Record<string, () => void> = {
+        m: () => tools.setTool("select"),
         p: () => tools.setTool("pencil"),
         b: () => tools.setTool("brush"),
         e: () => tools.setTool("eraser"),
@@ -213,6 +236,18 @@ export default function App() {
           </button>
           <button disabled={!open} title={t("zoom.hundred")} onClick={() => requestZoom("100")}>
             1:1
+          </button>
+          <button
+            disabled={!selRect || selFloating}
+            title={t("top.cropTip")}
+            onClick={() => {
+              const r = useSelection.getState().rect;
+              if (!r) return;
+              useSelection.getState().deselect();
+              useDoc.getState().cropDoc(r);
+            }}
+          >
+            <Icon name="crop" /> {t("top.crop")}
           </button>
         </div>
 

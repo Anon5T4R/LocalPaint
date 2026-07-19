@@ -5,6 +5,7 @@ import { create } from "zustand";
 import type { Rgba } from "../lib/color";
 
 export type Tool =
+  | "select"
   | "pencil"
   | "brush"
   | "eraser"

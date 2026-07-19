@@ -29,6 +29,7 @@ import type { HistoryEntry } from "../lib/history";
 import { getLayerCanvas, layerCtx, onRender, requestRender } from "../lib/layers";
 import { compositeInto } from "../lib/compose";
 import { useDoc } from "../state/doc";
+import { getFloatingCanvas, useSelection } from "../state/selection";
 import { useTools, type Tool } from "../state/tools";
 
 interface View {
@@ -82,6 +83,9 @@ export default function CanvasStage() {
     tool: Tool;
   } | null>(null);
   const checker = useRef<HTMLCanvasElement | null>(null);
+  // Gesto da ferramenta de seleção: marquee em criação OU arrasto do recorte.
+  const marquee = useRef<{ x0: number; y0: number } | null>(null);
+  const selDrag = useRef<{ lastX: number; lastY: number; lifted: boolean } | null>(null);
 
   // ── composição ────────────────────────────────────────────────────────────
 
@@ -134,12 +138,34 @@ export default function CanvasStage() {
       ctx.imageSmoothingEnabled = v.scale < 1;
       compositeInto(ctx, s.layers);
 
+      // Recorte flutuante da seleção (pixels levantados, seguindo o arrasto).
+      const sel = useSelection.getState();
+      if (sel.floating && sel.rect) {
+        const fc = getFloatingCanvas();
+        if (fc) ctx.drawImage(fc, sel.rect.x, sel.rect.y);
+      }
+
       // Preview de forma por cima (em coordenadas de doc).
       const sp = shape.current;
       if (sp) {
         drawShape(ctx, sp, 1 / v.scale);
       }
       ctx.restore();
+
+      // Contorno da seleção (formigas paradas: tracejado estático — animar
+      // exigiria rAF contínuo pra um enfeite).
+      if (sel.rect) {
+        const r = sel.rect;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(v.ox + r.x * v.scale + 0.5, v.oy + r.y * v.scale + 0.5, r.w * v.scale, r.h * v.scale);
+        ctx.strokeStyle = "#fff";
+        ctx.lineDashOffset = 5;
+        ctx.strokeRect(v.ox + r.x * v.scale + 0.5, v.oy + r.y * v.scale + 0.5, r.w * v.scale, r.h * v.scale);
+        ctx.restore();
+      }
 
       // Cursor de pincel (círculo do diâmetro real) — em px de tela.
       const m = mouse.current;
@@ -283,6 +309,15 @@ export default function CanvasStage() {
     const tools = useTools.getState();
     const ctx = layerCtx(st.layerId);
     ctx.save();
+    // Com seleção ativa (e não-flutuante), a pintura fica PRESA nela — o
+    // comportamento canônico de editor raster. O balde é a exceção documentada
+    // (o scanline não conhece máscara ainda).
+    const selRect = useSelection.getState().floating ? null : useSelection.getState().rect;
+    if (selRect) {
+      ctx.beginPath();
+      ctx.rect(selRect.x, selRect.y, selRect.w, selRect.h);
+      ctx.clip();
+    }
     if (st.tool === "eraser") {
       ctx.globalCompositeOperation = "destination-out";
       ctx.strokeStyle = "rgba(0,0,0,1)";
@@ -351,6 +386,25 @@ export default function CanvasStage() {
 
     if (tools.tool === "eyedropper") {
       pickColor(p.x, p.y, e.button === 2);
+      return;
+    }
+
+    if (tools.tool === "select") {
+      const sel = useSelection.getState();
+      const inside =
+        sel.rect &&
+        p.x >= sel.rect.x &&
+        p.x < sel.rect.x + sel.rect.w &&
+        p.y >= sel.rect.y &&
+        p.y < sel.rect.y + sel.rect.h;
+      if (inside) {
+        // Arrastar o conteúdo: o corte de verdade (lift) só acontece no
+        // primeiro MOVE — clicar dentro e soltar não pode cortar nada.
+        selDrag.current = { lastX: p.x, lastY: p.y, lifted: sel.floating };
+      } else {
+        useSelection.getState().deselect();
+        marquee.current = { x0: p.x, y0: p.y };
+      }
       return;
     }
 
@@ -435,6 +489,29 @@ export default function CanvasStage() {
       return;
     }
 
+    if (marquee.current) {
+      const p = toDoc(e);
+      const m = marquee.current;
+      useSelection.getState().select(normRect(m.x0, m.y0, p.x, p.y));
+      return;
+    }
+    if (selDrag.current) {
+      const p = toDoc(e);
+      const d = selDrag.current;
+      const dx = Math.round(p.x - d.lastX);
+      const dy = Math.round(p.y - d.lastY);
+      if (dx !== 0 || dy !== 0) {
+        if (!d.lifted) {
+          useSelection.getState().lift();
+          d.lifted = true;
+        }
+        useSelection.getState().moveBy(dx, dy);
+        d.lastX += dx;
+        d.lastY += dy;
+      }
+      return;
+    }
+
     const sp = shape.current;
     if (sp) {
       const p = toDoc(e);
@@ -470,6 +547,11 @@ export default function CanvasStage() {
   function onPointerUp(e: React.PointerEvent) {
     if (panning.current) {
       panning.current = null;
+      return;
+    }
+    if (marquee.current || selDrag.current) {
+      marquee.current = null;
+      selDrag.current = null;
       return;
     }
 

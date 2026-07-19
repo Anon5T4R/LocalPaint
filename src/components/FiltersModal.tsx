@@ -4,31 +4,35 @@ import { applyAdjust, boxBlur, grayscale, invert, isNeutral, NEUTRAL_ADJUST, sha
 import { t } from "../lib/i18n";
 import { getLayerCanvas, layerCtx, requestRender } from "../lib/layers";
 import { useDoc } from "../state/doc";
+import { useSelection } from "../state/selection";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-/** Aplica uma mutação de pixels na camada ativa INTEIRA com undo. Filtro não
- *  tem dirty-rect que preste (blur toca tudo) — paga a camada e pronto; o
- *  orçamento do histórico cuida da memória. */
+/** Aplica uma mutação de pixels na camada ativa com undo — na SELEÇÃO, se
+ *  houver uma (não-flutuante); senão na camada inteira. Filtro não tem
+ *  dirty-rect que preste (blur toca tudo que recebe) — paga a região e pronto;
+ *  o orçamento do histórico cuida da memória. */
 function applyToActiveLayer(label: string, fn: (data: Uint8ClampedArray, w: number, h: number) => void) {
   const s = useDoc.getState();
   if (!s.activeId) return;
   const layerId = s.activeId;
   const ctx = layerCtx(layerId);
-  const { width, height } = s;
-  const img = ctx.getImageData(0, 0, width, height);
+  const sel = useSelection.getState();
+  const region = sel.rect && !sel.floating ? sel.rect : { x: 0, y: 0, w: s.width, h: s.height };
+  const { x: rx, y: ry, w: width, h: height } = region;
+  const img = ctx.getImageData(rx, ry, width, height);
   const before = new Uint8ClampedArray(img.data);
   fn(img.data, width, height);
-  ctx.putImageData(img, 0, 0);
+  ctx.putImageData(img, rx, ry);
   const after = new Uint8ClampedArray(img.data);
   s.pushHistory({
     label,
     bytes: before.byteLength * 2,
-    undo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(before), width, height), 0, 0),
-    redo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(after), width, height), 0, 0),
+    undo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(before), width, height), rx, ry),
+    redo: () => layerCtx(layerId).putImageData(new ImageData(new Uint8ClampedArray(after), width, height), rx, ry),
   });
   requestRender();
 }
