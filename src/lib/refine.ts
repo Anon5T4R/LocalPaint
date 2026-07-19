@@ -4,45 +4,17 @@
  *  mask.ts (seleção binária). Os dois tipos não se misturam de propósito —
  *  ver análise §4.1: o refino vive só durante o modo e morre no Aplicar.
  *
+ *  O PINCEL não mora mais aqui: `paintMaskDab` migrou pro `maskpaint.ts` na
+ *  fatia ⑦, quando o remover objeto passou a pintar máscara também. O que
+ *  sobrou neste arquivo é o que é REALMENTE do refino — o blur da borda e a
+ *  recomposição do preview (RGB original × máscara), que não fazem sentido
+ *  num modo cuja máscara é instrução pro modelo e não altera pixel nenhum.
+ *
  *  Tudo aqui é Uint8ClampedArray sem canvas — testável em Node no vitest.
- *  A "suavidade do pincel" é a borda anti-aliased de ~1px do dab (o pincel
- *  do app não tem dureza configurável; a suavização de verdade é o blur da
- *  máscara inteira, no slider).
  */
 
 import type { Rect } from "./geometry";
-
-/** Um toque circular do pincel na máscara. `restore` pinta em direção a 255
- *  (max — nunca escurece o que já estava restaurado), apagar pinta em direção
- *  a 0 (min). Cobertura com borda macia de ~1px. Devolve o dirty-rect tocado
- *  (coordenadas do doc), ou null se caiu inteiro fora. */
-export function paintMaskDab(
-  mask: Uint8ClampedArray,
-  w: number,
-  h: number,
-  cx: number,
-  cy: number,
-  radius: number,
-  restore: boolean,
-): Rect | null {
-  const r = Math.max(0.5, radius);
-  const x0 = Math.max(0, Math.floor(cx - r - 1));
-  const y0 = Math.max(0, Math.floor(cy - r - 1));
-  const x1 = Math.min(w - 1, Math.ceil(cx + r + 1));
-  const y1 = Math.min(h - 1, Math.ceil(cy + r + 1));
-  if (x1 < x0 || y1 < y0) return null;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      const cov = Math.min(1, Math.max(0, r - d + 0.5));
-      if (cov <= 0) continue;
-      const p = y * w + x;
-      const v = cov * 255;
-      mask[p] = restore ? Math.max(mask[p], v) : Math.min(mask[p], 255 - v);
-    }
-  }
-  return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-}
+import { overlayRectRgba } from "./maskpaint";
 
 /** Box blur separável em UM canal (a mesma matemática do boxBlur dos filtros,
  *  sem RGBA nem premultiply — máscara não tem cor pra sangrar). 3 passadas ≈
@@ -114,20 +86,15 @@ export function composeRectRgba(
   return out;
 }
 
+/** Vermelho do véu — o convencional de máscara em editor de imagem. Mesmo tom
+ *  nos dois modos de propósito: "vermelho translúcido = a IA mexe aqui". */
+export const VEIL_RGB = { r: 255, g: 40, b: 70 } as const;
+
 /** RGBA do retângulo do VÉU: onde a máscara removeu (valor baixo), um véu
  *  vermelho semitransparente proporcional; onde manteve, nada. É o overlay
- *  opcional que mostra "o que a IA jogou fora" por cima do checkerboard. */
+ *  opcional que mostra "o que a IA jogou fora" por cima do checkerboard.
+ *  INVERTIDO em relação ao véu do remover objeto — aqui máscara baixa é o
+ *  buraco; lá o pintado é o buraco. Mesma função, direções opostas. */
 export function veilRectRgba(mask: Uint8ClampedArray, w: number, rect: Rect): Uint8ClampedArray {
-  const out = new Uint8ClampedArray(rect.w * rect.h * 4);
-  for (let y = 0; y < rect.h; y++) {
-    for (let x = 0; x < rect.w; x++) {
-      const p = (rect.y + y) * w + rect.x + x;
-      const o = (y * rect.w + x) * 4;
-      out[o] = 255;
-      out[o + 1] = 40;
-      out[o + 2] = 70;
-      out[o + 3] = Math.round((255 - mask[p]) * 0.45);
-    }
-  }
-  return out;
+  return overlayRectRgba(mask, w, rect, { ...VEIL_RGB, a: 0.45 }, true);
 }

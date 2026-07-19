@@ -30,6 +30,7 @@ import {
   type ExportFormat,
 } from "./lib/io";
 import { useDoc } from "./state/doc";
+import { useObjMask } from "./state/objmask";
 import { useRefine } from "./state/refine";
 import { useSelection } from "./state/selection";
 import { useTools } from "./state/tools";
@@ -52,11 +53,19 @@ export default function App() {
   // Modo Refinar vivo = o canvas da camada está emprestado pro preview:
   // salvar/exportar/desfazer/nova remoção ficam bloqueados até aplicar/cancelar.
   const refineActive = useRefine((s) => s.active);
+  // Modo "pintar a máscara" do remover objeto: NÃO empresta o canvas da camada
+  // (nenhum pixel muda até o LaMa rodar), mas bloqueia o mesmo conjunto de
+  // ações pela razão gêmea — sair pra salvar/desfazer no meio de uma máscara
+  // pela metade só pode terminar em máscara perdida sem aviso.
+  const objMaskActive = useObjMask((s) => s.active);
+  // O Aplicar da barra arma o modal do LaMa; os buffers seguem vivos até o
+  // modal fechar (é deles que ele tira a máscara).
+  const objArmed = useObjMask((s) => s.armed);
+  const busyMode = refineActive || objMaskActive;
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bgOpen, setBgOpen] = useState(false);
-  const [objOpen, setObjOpen] = useState(false);
 
   /** Ação que descarta o doc atual passa por aqui: pergunta se houver sujeira. */
   const guardUnsaved = async (): Promise<boolean> => {
@@ -193,6 +202,24 @@ export default function App() {
         if (e.key === "Delete" || e.key === "Backspace" || e.ctrlKey || e.metaKey) return;
       }
 
+      // Modo "pintar a máscara": mesmos Enter/Esc do Refinar de propósito —
+      // pro usuário é o mesmo gesto, e dois modos de máscara com teclas
+      // diferentes seria a UI mentindo sobre isso. Enter com máscara vazia é
+      // no-op (o `arm` recusa), não um LaMa rodando 20 s à toa.
+      const objmask = useObjMask.getState();
+      if (objmask.active) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          objmask.arm();
+          return;
+        }
+        if (e.key === "Escape") {
+          objmask.cancel();
+          return;
+        }
+        if (e.key === "Delete" || e.key === "Backspace" || e.ctrlKey || e.metaKey) return;
+      }
+
       if (e.key === "Escape") {
         useSelection.getState().deselect();
         return;
@@ -298,41 +325,45 @@ export default function App() {
           <button onClick={() => void doOpen()}>
             <Icon name="folder" /> {t("top.open")}
           </button>
-          <button disabled={!open || refineActive} title={t("top.addImageTip")} onClick={() => void doAddImage()}>
+          <button disabled={!open || busyMode} title={t("top.addImageTip")} onClick={() => void doAddImage()}>
             <Icon name="image" /> {t("top.addImage")}
           </button>
-          <button disabled={!open || refineActive} onClick={() => void doSave(false)}>
+          <button disabled={!open || busyMode} onClick={() => void doSave(false)}>
             <Icon name="save" /> {t("top.save")}
           </button>
-          <button disabled={!open || refineActive} onClick={() => void doSave(true)}>
+          <button disabled={!open || busyMode} onClick={() => void doSave(true)}>
             {t("top.saveAs")}
           </button>
-          <button disabled={!open || refineActive} onClick={() => setExportOpen(true)}>
+          <button disabled={!open || busyMode} onClick={() => setExportOpen(true)}>
             <Icon name="export" /> {t("top.export")}
           </button>
-          <button disabled={!open || refineActive} onClick={() => setFiltersOpen(true)}>
+          <button disabled={!open || busyMode} onClick={() => setFiltersOpen(true)}>
             <Icon name="sliders" /> {t("top.filters")}
           </button>
-          <button disabled={!open || refineActive} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
+          <button disabled={!open || busyMode} title={t("top.removeBgTip")} onClick={() => setBgOpen(true)}>
             <Icon name="scissors" /> {t("top.removeBg")}
           </button>
-          {/* Só com seleção parada: sem seleção não há o que remover, e com o
-              recorte FLUTUANTE os pixels não estão mais na camada — o inpaint
-              leria um buraco que o usuário ainda não assentou. */}
+          {/* Não exige mais seleção: o botão ENTRA no modo de pintar a máscara
+              (fatia ⑦), e a seleção — quando existe — vira só o ponto de
+              partida. Com o recorte FLUTUANTE segue bloqueado: os pixels não
+              estão na camada, e o inpaint leria um buraco que o usuário ainda
+              não assentou. */}
           <button
-            disabled={!open || refineActive || !selRect || selFloating}
+            disabled={!open || busyMode || selFloating}
             title={t("top.removeObjTip")}
-            onClick={() => setObjOpen(true)}
+            onClick={() =>
+              useObjMask.getState().start(selRect ? { bounds: selRect, mask: useSelection.getState().mask } : null)
+            }
           >
             <Icon name="eraser" /> {t("top.removeObj")}
           </button>
         </div>
 
         <div className="topbar-group">
-          <button disabled={!canUndo || refineActive} title={t("top.undo")} onClick={undo}>
+          <button disabled={!canUndo || busyMode} title={t("top.undo")} onClick={undo}>
             <Icon name="undo" />
           </button>
-          <button disabled={!canRedo || refineActive} title={t("top.redo")} onClick={redo}>
+          <button disabled={!canRedo || busyMode} title={t("top.redo")} onClick={redo}>
             <Icon name="redo" />
           </button>
           <button disabled={!open} title={t("zoom.fit")} onClick={() => requestZoom("fit")}>
@@ -420,7 +451,10 @@ export default function App() {
       <NewDocModal open={newOpen} onClose={() => setNewOpen(false)} />
       <FiltersModal open={filtersOpen} onClose={() => setFiltersOpen(false)} />
       <BgRemoveModal open={bgOpen} onClose={() => setBgOpen(false)} />
-      <RemoveObjModal open={objOpen} onClose={() => setObjOpen(false)} />
+      {/* O modal do LaMa não tem estado próprio de abertura: quem manda é o
+          `armed` do modo de máscara. Fechar = `finish()`, que larga os buffers
+          e sai do modo (tanto no sucesso quanto na falha/cancelamento). */}
+      <RemoveObjModal open={objArmed} onClose={() => useObjMask.getState().finish()} />
       <TextModal at={textAt} onClose={() => useTools.getState().setTextAt(null)} />
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => setExportOpen(false)}>

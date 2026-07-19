@@ -18,7 +18,8 @@
 
 import { create } from "zustand";
 
-import { blurMask, composeRectRgba, paintMaskDab, veilRectRgba } from "../lib/refine";
+import { blurMask, composeRectRgba, veilRectRgba } from "../lib/refine";
+import { paintMaskDab } from "../lib/maskpaint";
 import { applyMaskAlpha } from "../lib/matte";
 import { getLayerCanvas, layerCtx, requestRender } from "../lib/layers";
 import type { Rect } from "../lib/geometry";

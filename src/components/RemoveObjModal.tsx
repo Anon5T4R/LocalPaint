@@ -7,7 +7,7 @@ import { t } from "../lib/i18n";
 import { getLayerCanvas, layerCtx, requestRender } from "../lib/layers";
 import { cancelFetch, fetchModel, MODEL_BYTES, modelPath, removeObject } from "../lib/removeobj";
 import { useDoc } from "../state/doc";
-import { useSelection } from "../state/selection";
+import { getObjMaskSel } from "../state/objmask";
 import { useUi } from "../state/ui";
 
 interface Props {
@@ -33,6 +33,11 @@ const mb = (n: number) => Math.round(n / MB);
  *  resultado ruim é "faltou pegar um pedaço", e resolver isso significa
  *  expandir a MESMA seleção e rodar de novo — perder a seleção obrigaria a
  *  refazê-la do zero justamente na hora em que ela é mais precisa.
+ *
+ *  Desde a fatia ⑦ a máscara NÃO vem mais da seleção direto: vem do modo
+ *  "pintar a máscara" (`state/objmask.ts`), que por sua vez pode ter começado
+ *  DA seleção. Só a origem mudou — daqui pra baixo é o mesmo `removeObject` de
+ *  sempre, com a mesma dilatação, a mesma janela de recorte e o mesmo worker.
  */
 export default function RemoveObjModal({ open, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>("checking");
@@ -63,15 +68,18 @@ export default function RemoveObjModal({ open, onClose }: Props) {
     setAi(null);
     try {
       const doc = useDoc.getState();
-      const { rect, mask } = useSelection.getState();
+      const sel = getObjMaskSel();
       const layerId = doc.activeId;
       const canvas = layerId ? getLayerCanvas(layerId) : undefined;
       if (!layerId || !canvas) throw new Error("no layer");
-      if (!rect) throw new Error("no selection");
+      // A barra desabilita o Aplicar com máscara vazia; aqui é cinto de
+      // segurança (mandar máscara vazia pro LaMa gastaria 20 s pra devolver a
+      // imagem igual).
+      if (!sel) throw new Error("no mask");
 
       const { crop, before, after, inferenceMs } = await removeObject(
         canvas,
-        { bounds: rect, mask },
+        sel,
         doc.width,
         doc.height,
         (p) => {

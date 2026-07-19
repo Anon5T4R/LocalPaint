@@ -141,7 +141,7 @@ const pt = {
   "bg.refineStart": "Fundo removido — refine o recorte com o pincel e aplique (Enter)",
 
   "top.removeObj": "Remover objeto",
-  "top.removeObjTip": "Apagar o que está selecionado e preencher com o fundo (IA local) — precisa de uma seleção",
+  "top.removeObjTip": "Pintar por cima do que deve sumir e preencher com o fundo (IA local) — a seleção ativa entra como ponto de partida",
   "obj.title": "Remover objeto",
   "obj.needModel":
     "O preenchimento usa o modelo LaMa (~{size} MB), baixado uma única vez. Depois disso tudo roda 100% local — nada sai da sua máquina.",
@@ -154,6 +154,14 @@ const pt = {
   // wasm no caso do LaMa). Dizer isso evita que o usuário leia a demora
   // inicial como "travou".
   "ai.loading": "Carregando o modelo na memória… (só na primeira vez)",
+
+  "objmask.title": "Pintar a máscara",
+  "objmask.paint": "Pincel",
+  "objmask.erase": "Apagar",
+  "objmask.painted": "{n} px marcados",
+  "objmask.apply": "Remover (Enter)",
+  "objmask.hint":
+    "Pinte por cima do que deve sumir — pode ser grosseiro, o modelo tolera folga. O botão direito apaga da máscara; [ e ] mudam o tamanho. Enter remove, Esc cancela.",
 
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",
@@ -324,7 +332,7 @@ const en: Record<MessageKey, string> = {
   "bg.refineStart": "Background removed — refine the cutout with the brush and apply (Enter)",
 
   "top.removeObj": "Remove object",
-  "top.removeObjTip": "Erase what's selected and fill it in with the background (local AI) — needs a selection",
+  "top.removeObjTip": "Paint over what should disappear and fill it in with the background (local AI) — the active selection is the starting point",
   "obj.title": "Remove object",
   "obj.needModel":
     "The fill uses the LaMa model (~{size} MB), downloaded only once. After that everything runs 100% locally — nothing leaves your machine.",
@@ -333,6 +341,14 @@ const en: Record<MessageKey, string> = {
   "obj.err": "Failed to remove the object: {err}",
 
   "ai.loading": "Loading the model into memory… (first time only)",
+
+  "objmask.title": "Paint the mask",
+  "objmask.paint": "Brush",
+  "objmask.erase": "Erase",
+  "objmask.painted": "{n} px marked",
+  "objmask.apply": "Remove (Enter)",
+  "objmask.hint":
+    "Paint over what should disappear — rough is fine, the model tolerates slack. Right button erases from the mask; [ and ] change the size. Enter removes, Esc cancels.",
 
   "refine.title": "Refine cutout",
   "refine.restore": "Restore",
@@ -501,7 +517,7 @@ const es: Record<MessageKey, string> = {
   "bg.refineStart": "Fondo quitado — refina el recorte con el pincel y aplica (Enter)",
 
   "top.removeObj": "Quitar objeto",
-  "top.removeObjTip": "Borrar lo seleccionado y rellenarlo con el fondo (IA local) — necesita una selección",
+  "top.removeObjTip": "Pintar encima de lo que debe desaparecer y rellenarlo con el fondo (IA local) — la selección activa es el punto de partida",
   "obj.title": "Quitar objeto",
   "obj.needModel":
     "El relleno usa el modelo LaMa (~{size} MB), descargado una sola vez. Después todo corre 100% local — nada sale de tu máquina.",
@@ -510,6 +526,14 @@ const es: Record<MessageKey, string> = {
   "obj.err": "Error al quitar el objeto: {err}",
 
   "ai.loading": "Cargando el modelo en memoria… (solo la primera vez)",
+
+  "objmask.title": "Pintar la máscara",
+  "objmask.paint": "Pincel",
+  "objmask.erase": "Borrar",
+  "objmask.painted": "{n} px marcados",
+  "objmask.apply": "Quitar (Enter)",
+  "objmask.hint":
+    "Pinta encima de lo que debe desaparecer — puede ser burdo, el modelo tolera holgura. El botón derecho borra de la máscara; [ y ] cambian el tamaño. Enter quita, Esc cancela.",
 
   "refine.title": "Refinar recorte",
   "refine.restore": "Restaurar",

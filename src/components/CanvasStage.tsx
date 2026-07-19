@@ -29,11 +29,47 @@ import {
 import type { HistoryEntry } from "../lib/history";
 import { getLayerCanvas, layerCtx, onRender, requestRender } from "../lib/layers";
 import { compositeInto } from "../lib/compose";
+import { strokePoints } from "../lib/maskpaint";
 import { useDoc } from "../state/doc";
+import { getObjMaskCanvas, useObjMask } from "../state/objmask";
 import { getVeilCanvas, useRefine } from "../state/refine";
 import { getFloatingCanvas, useSelection } from "../state/selection";
 import { useTools, type Tool } from "../state/tools";
+import ObjMaskBar from "./ObjMaskBar";
 import RefineBar from "./RefineBar";
+
+/** Um modo que captura o gesto inteiro pra pintar MÁSCARA em vez de pixels
+ *  (Refinar da remoção de fundo, máscara do remover objeto). Os dois têm o
+ *  mesmo gesto e o CanvasStage não precisa saber de qual se trata — só de
+ *  quem recebe o dab. Ver `lib/maskpaint.ts` sobre o que é compartilhado. */
+interface MaskBrush {
+  /** true quando o dab APAGA da máscara (o botão direito inverte na hora). */
+  erasing: (rightButton: boolean) => boolean;
+  paintAt: (x: number, y: number, radius: number, erase: boolean) => void;
+  endStroke: () => void;
+}
+
+/** O modo de máscara ativo, se houver. Refinar tem precedência só porque os
+ *  dois nunca coexistem (o App bloqueia abrir um com o outro vivo). */
+function activeMaskBrush(): MaskBrush | null {
+  const refine = useRefine.getState();
+  if (refine.active) {
+    return {
+      erasing: (rb) => (refine.mode === "erase") !== rb,
+      paintAt: refine.paintAt,
+      endStroke: refine.endStroke,
+    };
+  }
+  const objmask = useObjMask.getState();
+  if (objmask.active) {
+    return {
+      erasing: (rb) => (objmask.mode === "erase") !== rb,
+      paintAt: objmask.paintAt,
+      endStroke: objmask.endStroke,
+    };
+  }
+  return null;
+}
 
 interface View {
   scale: number;
@@ -89,8 +125,10 @@ export default function CanvasStage() {
   // Gesto da ferramenta de seleção: marquee em criação OU arrasto do recorte.
   const marquee = useRef<{ x0: number; y0: number } | null>(null);
   const selDrag = useRef<{ lastX: number; lastY: number; lifted: boolean } | null>(null);
-  // Traço do modo REFINAR (pinta a MÁSCARA da remoção de fundo, não a camada).
-  const refineDrag = useRef<{ erase: boolean; last: { x: number; y: number } } | null>(null);
+  // Traço de um modo de MÁSCARA (Refinar ou máscara do remover objeto): pinta
+  // a máscara do modo, nunca a camada. `brush` fica preso no gesto — trocar de
+  // modo no meio de um arrasto não pode redirecionar os dabs.
+  const maskDrag = useRef<{ brush: MaskBrush; erase: boolean; last: { x: number; y: number } } | null>(null);
   // Path2Ds da seleção MASCARADA, cacheados pela identidade da máscara (ela é
   // imutável por seleção): `outline` = contorno de verdade das marching ants;
   // `clip` = retângulos dos runs (fill nonzero) pro clip da pintura. Coords
@@ -177,6 +215,15 @@ export default function CanvasStage() {
         if (vc) ctx.drawImage(vc, 0, 0);
       }
 
+      // Véu do modo "pintar a máscara": vermelho translúcido no que vai sumir.
+      // Aqui ele NÃO é opcional — é a única prova visual do que o modelo vai
+      // receber (nenhum pixel do documento mudou ainda).
+      const objmask = useObjMask.getState();
+      if (objmask.active) {
+        const oc = getObjMaskCanvas();
+        if (oc) ctx.drawImage(oc, 0, 0);
+      }
+
       // Preview de forma por cima (em coordenadas de doc).
       const sp = shape.current;
       if (sp) {
@@ -221,7 +268,7 @@ export default function CanvasStage() {
       // Refinar o círculo aparece SEMPRE (a ferramenta ativa é irrelevante lá).
       const m = mouse.current;
       const tool = useTools.getState().tool;
-      if (m && (refine.active || tool === "brush" || tool === "eraser" || tool === "pencil")) {
+      if (m && (refine.active || objmask.active || tool === "brush" || tool === "eraser" || tool === "pencil")) {
         const d = useTools.getState().size * v.scale;
         ctx.strokeStyle = "rgba(0,0,0,.7)";
         ctx.lineWidth = 1;
@@ -245,12 +292,14 @@ export default function CanvasStage() {
     const un1 = useDoc.subscribe(() => requestRender());
     const un2 = useTools.subscribe(() => requestRender());
     const un3 = useRefine.subscribe(() => requestRender());
+    const un4 = useObjMask.subscribe(() => requestRender());
     const ro = new ResizeObserver(() => requestRender());
     if (hostRef.current) ro.observe(hostRef.current);
     return () => {
       un1();
       un2();
       un3();
+      un4();
       ro.disconnect();
     };
   }, []);
@@ -447,14 +496,14 @@ export default function CanvasStage() {
     const tools = useTools.getState();
     const p = toDoc(e);
 
-    // Modo REFINAR captura o gesto inteiro: qualquer ferramenta vira o pincel
-    // de máscara. Botão direito inverte o modo na hora (restaurar ⇄ apagar).
-    const refine = useRefine.getState();
-    if (refine.active) {
-      const erase = (refine.mode === "erase") !== (e.button === 2);
+    // Modo de MÁSCARA captura o gesto inteiro: qualquer ferramenta vira o
+    // pincel de máscara. Botão direito inverte o modo na hora.
+    const brush = activeMaskBrush();
+    if (brush) {
+      const erase = brush.erasing(e.button === 2);
       const radius = Math.max(0.5, tools.size / 2);
-      refine.paintAt(p.x, p.y, radius, erase);
-      refineDrag.current = { erase, last: { x: p.x, y: p.y } };
+      brush.paintAt(p.x, p.y, radius, erase);
+      maskDrag.current = { brush, erase, last: { x: p.x, y: p.y } };
       return;
     }
 
@@ -605,23 +654,14 @@ export default function CanvasStage() {
       return;
     }
 
-    if (refineDrag.current) {
-      // Interpola o traço em passos de meio raio — pointermove esparso não
-      // pode deixar buracos no restauro (não há coalesced pra máscara aqui:
-      // dabs são caros, meio raio é denso o bastante e limita o custo).
+    if (maskDrag.current) {
+      // A interpolação do traço (passos de meio raio) mora no `strokePoints` —
+      // pointermove esparso não pode deixar buraco na máscara.
       const p = toDoc(e);
-      const d = refineDrag.current;
+      const d = maskDrag.current;
       const radius = Math.max(0.5, useTools.getState().size / 2);
-      const dist = Math.hypot(p.x - d.last.x, p.y - d.last.y);
-      const steps = Math.max(1, Math.ceil(dist / Math.max(1, radius / 2)));
-      const refine = useRefine.getState();
-      for (let i = 1; i <= steps; i++) {
-        refine.paintAt(
-          d.last.x + ((p.x - d.last.x) * i) / steps,
-          d.last.y + ((p.y - d.last.y) * i) / steps,
-          radius,
-          d.erase,
-        );
+      for (const q of strokePoints(d.last.x, d.last.y, p.x, p.y, radius)) {
+        d.brush.paintAt(q.x, q.y, radius, d.erase);
       }
       d.last = { x: p.x, y: p.y };
       return;
@@ -687,9 +727,10 @@ export default function CanvasStage() {
       panning.current = null;
       return;
     }
-    if (refineDrag.current) {
-      refineDrag.current = null;
-      useRefine.getState().endStroke();
+    if (maskDrag.current) {
+      const d = maskDrag.current;
+      maskDrag.current = null;
+      d.brush.endStroke();
       return;
     }
     if (marquee.current || selDrag.current) {
@@ -846,6 +887,7 @@ export default function CanvasStage() {
         onContextMenu={(e) => e.preventDefault()}
       />
       <RefineBar />
+      <ObjMaskBar />
     </div>
   );
 }

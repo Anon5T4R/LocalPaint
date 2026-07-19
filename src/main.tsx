@@ -22,14 +22,25 @@ if (import.meta.env.DEV) {
     import("./lib/layers"),
     import("./state/selection"),
     import("./state/refine"),
+    import("./state/objmask"),
+    import("./lib/maskpaint"),
   ]).then(
-    ([d, tl, ly, sl, rf]) => {
+    ([d, tl, ly, sl, rf, om, mp]) => {
       (window as unknown as Record<string, unknown>).__lp = {
         doc: d.useDoc,
         tools: tl.useTools,
         layers: ly,
         selection: sl.useSelection,
         refine: rf.useRefine,
+        // Fatia ⑦: o modo de pintar máscara. A ponte expõe o STORE e o
+        // BUFFER cru — a prova de GUI mede em pixels (quantos o traço marcou,
+        // quanto a borracha subtraiu, se a seleção-guia entrou certa), e isso
+        // não dá pra ler de screenshot.
+        objmask: om.useObjMask,
+        objmaskBuf: om.getObjMaskBuffer,
+        objmaskCanvas: om.getObjMaskCanvas,
+        objmaskSel: om.getObjMaskSel,
+        maskpaint: mp,
         // Prova do backend do ORT sem precisar do modelo (ver ort.ts).
         ortSelfTest: () => import("./lib/ort").then((m) => m.ortSelfTest()),
         // O ORT cru, pra ponte poder montar uma sessão NA THREAD PRINCIPAL e
