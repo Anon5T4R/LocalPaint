@@ -6,6 +6,7 @@ import type { Rgba } from "../lib/color";
 
 export type Tool =
   | "select"
+  | "text"
   | "pencil"
   | "brush"
   | "eraser"
@@ -27,6 +28,9 @@ interface ToolsState {
   primary: Rgba;
   secondary: Rgba;
   recent: Rgba[];
+  /** Clique da ferramenta de texto (coordenada de doc) — abre o TextModal. */
+  textAt: { x: number; y: number } | null;
+  setTextAt: (p: { x: number; y: number } | null) => void;
 
   setTool: (t: Tool) => void;
   setSize: (n: number) => void;
@@ -49,6 +53,8 @@ export const useTools = create<ToolsState>((set) => ({
   primary: { r: 34, g: 34, b: 34, a: 255 },
   secondary: { r: 255, g: 255, b: 255, a: 255 },
   recent: [],
+  textAt: null,
+  setTextAt: (textAt) => set({ textAt }),
 
   setTool: (tool) => set({ tool }),
   setSize: (n) => set({ size: Math.min(200, Math.max(1, Math.round(n))) }),

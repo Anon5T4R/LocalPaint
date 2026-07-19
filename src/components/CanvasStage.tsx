@@ -411,6 +411,12 @@ export default function CanvasStage() {
     const layerId = activeLayerId();
     if (!layerId) return;
 
+    if (tools.tool === "text") {
+      // O modal cuida do resto; o clique só marca ONDE (coordenada de doc).
+      useTools.getState().setTextAt({ x: Math.round(p.x), y: Math.round(p.y) });
+      return;
+    }
+
     if (tools.tool === "fill") {
       const rectFull: Rect = { x: 0, y: 0, w: s.width, h: s.height };
       void rectFull;

@@ -11,6 +11,7 @@ import Icon from "./components/Icon";
 import LayersPanel from "./components/LayersPanel";
 import NewDocModal from "./components/NewDocModal";
 import SettingsModal from "./components/SettingsModal";
+import TextModal from "./components/TextModal";
 import Toasts from "./components/Toasts";
 import Toolbar from "./components/Toolbar";
 import { t } from "./lib/i18n";
@@ -32,6 +33,7 @@ export default function App() {
   const setSettingsOpen = useUi((s) => s.setSettingsOpen);
 
   const selRect = useSelection((s) => s.rect);
+  const textAt = useTools((s) => s.textAt);
   const selFloating = useSelection((s) => s.floating);
   const [newOpen, setNewOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
@@ -168,6 +170,7 @@ export default function App() {
       const tools = useTools.getState();
       const map: Record<string, () => void> = {
         m: () => tools.setTool("select"),
+        t: () => tools.setTool("text"),
         p: () => tools.setTool("pencil"),
         b: () => tools.setTool("brush"),
         e: () => tools.setTool("eraser"),
@@ -294,6 +297,7 @@ export default function App() {
 
       <NewDocModal open={newOpen} onClose={() => setNewOpen(false)} />
       <FiltersModal open={filtersOpen} onClose={() => setFiltersOpen(false)} />
+      <TextModal at={textAt} onClose={() => useTools.getState().setTextAt(null)} />
       {exportOpen && (
         <div className="modal-backdrop" onClick={() => setExportOpen(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
