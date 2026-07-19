@@ -74,6 +74,10 @@ const pt = {
   "layers.toggleVis": "Mostrar/ocultar",
   "layers.renameHint": "Duplo clique renomeia",
 
+  "sel.stampTo": "Assentar em: {name}",
+  "sel.stampHint": "Esc assenta aqui",
+  "sel.stampTip": "O recorte flutuante vai ser carimbado na camada ativa — Esc, clicar fora ou este botão assentam",
+
   "blend.normal": "Normal",
   "blend.multiply": "Multiplicar",
   "blend.screen": "Divisão",
@@ -219,6 +223,10 @@ const en: Record<MessageKey, string> = {
   "layers.toggleVis": "Show/hide",
   "layers.renameHint": "Double-click to rename",
 
+  "sel.stampTo": "Stamp onto: {name}",
+  "sel.stampHint": "Esc stamps here",
+  "sel.stampTip": "The floating cutout will be stamped onto the active layer — Esc, clicking outside or this button stamps it",
+
   "blend.normal": "Normal",
   "blend.multiply": "Multiply",
   "blend.screen": "Screen",
@@ -361,6 +369,10 @@ const es: Record<MessageKey, string> = {
   "layers.blend": "Fusión",
   "layers.toggleVis": "Mostrar/ocultar",
   "layers.renameHint": "Doble clic para renombrar",
+
+  "sel.stampTo": "Asentar en: {name}",
+  "sel.stampHint": "Esc asienta aquí",
+  "sel.stampTip": "El recorte flotante se estampará en la capa activa — Esc, un clic fuera o este botón lo asientan",
 
   "blend.normal": "Normal",
   "blend.multiply": "Multiplicar",

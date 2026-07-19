@@ -4,12 +4,20 @@ import Icon from "./Icon";
 import { t } from "../lib/i18n";
 import { BLEND_MODES, type BlendMode } from "../lib/model";
 import { useDoc } from "../state/doc";
+import { useSelection } from "../state/selection";
 
 /** Painel de camadas — a lista é DE CIMA PRA BAIXO na tela (a camada do topo
- *  da lista é a que cobre as outras), então renderiza o array invertido. */
+ *  da lista é a que cobre as outras), então renderiza o array invertido.
+ *
+ *  Com um recorte FLUTUANTE vivo, o painel vira também o seletor de DESTINO:
+ *  clicar numa camada troca a ativa E marca visualmente que o assentamento
+ *  (Esc/clique fora) vai carimbar nela — é assim que se move uma seleção pra
+ *  outra camada. */
 export default function LayersPanel() {
   const layers = useDoc((s) => s.layers);
   const activeId = useDoc((s) => s.activeId);
+  const floating = useSelection((s) => s.floating);
+  const commitSel = useSelection((s) => s.commit);
   const setActive = useDoc((s) => s.setActive);
   const addLayer = useDoc((s) => s.addLayer);
   const removeLayer = useDoc((s) => s.removeLayer);
@@ -71,11 +79,22 @@ export default function LayersPanel() {
         </div>
       </div>
 
+      {floating && active && (
+        <button
+          className="stamp-banner"
+          title={t("sel.stampTip")}
+          onClick={() => commitSel()}
+        >
+          {t("sel.stampTo", { name: active.name })}
+        </button>
+      )}
+
       <div className="layers-list">
         {top.map((l) => (
           <div
             key={l.id}
-            className={`layer-row${l.id === activeId ? " active" : ""}`}
+            className={`layer-row${l.id === activeId ? " active" : ""}${floating && l.id === activeId ? " stamp-target" : ""}`}
+            title={floating && l.id === activeId ? t("sel.stampHint") : undefined}
             onClick={() => setActive(l.id)}
           >
             <button

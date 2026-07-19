@@ -16,12 +16,18 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () 
 // stores e o registro de camadas no `window` pra prova dirigida por CDP sem
 // diálogo nativo. Em produção o bundler apaga o bloco — não vai um byte.
 if (import.meta.env.DEV) {
-  void Promise.all([import("./state/doc"), import("./state/tools"), import("./lib/layers")]).then(
-    ([d, tl, ly]) => {
+  void Promise.all([
+    import("./state/doc"),
+    import("./state/tools"),
+    import("./lib/layers"),
+    import("./state/selection"),
+  ]).then(
+    ([d, tl, ly, sl]) => {
       (window as unknown as Record<string, unknown>).__lp = {
         doc: d.useDoc,
         tools: tl.useTools,
         layers: ly,
+        selection: sl.useSelection,
         // Prova do backend do ORT sem precisar do modelo (ver bgremove.ts).
         ortSelfTest: () => import("./lib/bgremove").then((m) => m.ortSelfTest()),
       };

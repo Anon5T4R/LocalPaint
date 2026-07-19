@@ -6,14 +6,17 @@
  *
  *  Modelo de commit (o mesmo dos editores raster): mover pela primeira vez
  *  CORTA os pixels da camada (undo próprio); soltar em outro lugar ainda é
- *  flutuante; desselecionar/trocar de ferramenta CARIMBA na camada (undo
- *  próprio). Undo no meio devolve cada passo na ordem.
+ *  flutuante; desselecionar/trocar de ferramenta CARIMBA na camada ATIVA no
+ *  momento do commit (undo próprio) — trocar de camada com o flutuante vivo
+ *  é como se move recorte pra outra camada. Undo no meio devolve cada passo
+ *  na ordem: o corte desfaz na ORIGEM, o carimbo desfaz no DESTINO.
  */
 
 import { create } from "zustand";
 
 import { clampRect, type Rect } from "../lib/geometry";
 import { layerCtx, requestRender } from "../lib/layers";
+import { resolveStampTarget } from "../lib/stamp";
 import { useDoc } from "./doc";
 
 let floatingCanvas: HTMLCanvasElement | null = null;
@@ -27,7 +30,7 @@ interface SelectionState {
   rect: Rect | null;
   /** true = os pixels da seleção estão levantados (no canvas flutuante). */
   floating: boolean;
-  /** De qual camada os pixels foram levantados (o carimbo volta NELA). */
+  /** De qual camada os pixels foram levantados (fallback do carimbo). */
   floatingLayerId: string | null;
 
   select: (r: Rect | null) => void;
@@ -35,8 +38,11 @@ interface SelectionState {
   /** Levanta os pixels da camada ativa pro flutuante (início do arrasto). */
   lift: () => void;
   moveBy: (dx: number, dy: number) => void;
-  /** Carimba o flutuante na camada e limpa a seleção. */
-  commit: () => void;
+  /** Carimba o flutuante e limpa a seleção. O destino é a camada ATIVA no
+   *  momento do commit (regra de editor raster: mover recorte + trocar de
+   *  camada = mover pra outra camada); `targetLayerId` força um destino
+   *  explícito; a origem é só o fallback (lib/stamp.ts decide). */
+  commit: (targetLayerId?: string) => void;
   /** Sem seleção não há o que fazer; com flutuante, carimba antes de limpar. */
   deselect: () => void;
   /** Apaga o conteúdo da seleção na camada ativa (Delete). */
@@ -114,7 +120,7 @@ export const useSelection = create<SelectionState>((set, get) => ({
     requestRender();
   },
 
-  commit: () => {
+  commit: (targetLayerId) => {
     const { rect, floating, floatingLayerId } = get();
     if (!rect || !floating || !floatingLayerId || !floatingCanvas) {
       set({ rect: null, floating: false, floatingLayerId: null });
@@ -122,10 +128,13 @@ export const useSelection = create<SelectionState>((set, get) => ({
       return;
     }
     const doc = useDoc.getState();
-    // A camada pode ter sido removida enquanto o flutuante existia.
-    const layerId = doc.layers.some((l) => l.id === floatingLayerId)
-      ? floatingLayerId
-      : doc.activeId;
+    // Destino: explícito → ativa → origem (ids mortos são pulados).
+    const layerId = resolveStampTarget({
+      explicit: targetLayerId,
+      activeId: doc.activeId,
+      floatingLayerId,
+      layerIds: doc.layers.map((l) => l.id),
+    });
     if (!layerId) return;
 
     const ctx = layerCtx(layerId);
