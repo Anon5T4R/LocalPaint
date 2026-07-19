@@ -12,6 +12,15 @@ export default defineConfig(async () => ({
     dedupe: ["react", "react-dom"],
   },
 
+  // O onnxruntime-web carrega o runtime wasm com um import() de URL calculada
+  // em runtime; o pré-bundle do dev reescreve esse import e ele passa a
+  // falhar com "no available backend found" SÓ EM DEV — o que mascara a
+  // prova do backend. Fora do optimizeDeps, o loader fica nativo nos dois
+  // mundos (dev = prod) e o selfteste do bgremove vale como prova.
+  optimizeDeps: {
+    exclude: ["onnxruntime-web"],
+  },
+
   clearScreen: false,
   server: {
     // Porta única do LocalPaint na suíte (plano-so-completo §4.1): 1482.

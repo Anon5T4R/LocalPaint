@@ -22,6 +22,8 @@ if (import.meta.env.DEV) {
         doc: d.useDoc,
         tools: tl.useTools,
         layers: ly,
+        // Prova do backend do ORT sem precisar do modelo (ver bgremove.ts).
+        ortSelfTest: () => import("./lib/bgremove").then((m) => m.ortSelfTest()),
       };
     },
   );
