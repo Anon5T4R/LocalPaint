@@ -32,6 +32,8 @@ export type IconName =
   | "fit"
   | "sliders"
   | "select"
+  | "wand"
+  | "invert"
   | "crop"
   | "text"
   | "scissors";
@@ -65,6 +67,8 @@ const PATHS: Record<IconName, { d: string; fill?: boolean }> = {
   fit: { d: "M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" },
   sliders: { d: "M5 4v6M5 14v6M12 4v10M12 18v2M19 4v2M19 10v10M3 10h4M10 14h4M17 6h4" },
   select: { d: "M5 5h3M11 5h3M17 5h2v2M19 10v3M19 16v3h-2M14 19h-3M8 19H5v-3M5 13v-3" },
+  wand: { d: "M3 21L13 11M11.5 9.5l3 3M18 2v3M18 9v3M14 6h3M19 6h3" },
+  invert: { d: "M5 5h6M14 5h5v5M19 13v6h-6M10 19H5v-5M5 11V8M19 19L5 5" },
   crop: { d: "M7 3v14h14M3 7h14v14" },
   text: { d: "M5 6V4h14v2M12 4v16M9 20h6" },
   scissors: { d: "M6 9a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM6 21a3 3 0 1 1 0-6 3 3 0 0 1 0 6zM20 4L8.1 15.9M14.7 14.7L20 20M8.1 8.1L12 12" },

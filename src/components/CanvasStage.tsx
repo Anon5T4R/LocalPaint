@@ -14,7 +14,8 @@
 import { useEffect, useRef } from "react";
 
 import { rgbaToCss, type Rgba } from "../lib/color";
-import { floodFill } from "../lib/fill";
+import { floodFill, floodFillSelect } from "../lib/fill";
+import { maskOutline, maskRunRects, rectMask, unionSel } from "../lib/mask";
 import {
   bresenham,
   clampRect,
@@ -86,6 +87,26 @@ export default function CanvasStage() {
   // Gesto da ferramenta de seleção: marquee em criação OU arrasto do recorte.
   const marquee = useRef<{ x0: number; y0: number } | null>(null);
   const selDrag = useRef<{ lastX: number; lastY: number; lifted: boolean } | null>(null);
+  // Path2Ds da seleção MASCARADA, cacheados pela identidade da máscara (ela é
+  // imutável por seleção): `outline` = contorno de verdade das marching ants;
+  // `clip` = retângulos dos runs (fill nonzero) pro clip da pintura. Coords
+  // LOCAIS ao bounds — quem desenha translada. É o cache que a análise pediu
+  // pra não pagar o traçado a cada frame/segmento.
+  const maskPaths = useRef<{ mask: Uint8Array; outline: Path2D; clip: Path2D } | null>(null);
+
+  function getMaskPaths(mask: Uint8Array, w: number, h: number): { outline: Path2D; clip: Path2D } {
+    const c = maskPaths.current;
+    if (c && c.mask === mask) return c;
+    const outline = new Path2D();
+    for (const [x0, y0, x1, y1] of maskOutline(mask, w, h)) {
+      outline.moveTo(x0, y0);
+      outline.lineTo(x1, y1);
+    }
+    const clip = new Path2D();
+    for (const r of maskRunRects(mask, w, h)) clip.rect(r.x, r.y, r.w, r.h);
+    maskPaths.current = { mask, outline, clip };
+    return maskPaths.current;
+  }
 
   // ── composição ────────────────────────────────────────────────────────────
 
@@ -153,8 +174,26 @@ export default function CanvasStage() {
       ctx.restore();
 
       // Contorno da seleção (formigas paradas: tracejado estático — animar
-      // exigiria rAF contínuo pra um enfeite).
-      if (sel.rect) {
+      // exigiria rAF contínuo pra um enfeite). Com máscara, as formigas
+      // seguem o CONTORNO real (Path2D cacheado por seleção), não o bbox.
+      if (sel.rect && sel.mask) {
+        const r = sel.rect;
+        const { outline } = getMaskPaths(sel.mask, r.w, r.h);
+        ctx.save();
+        // Desenha em espaço de DOC (o path é local ao bounds) com traço e
+        // tracejado compensados pra 1px de TELA.
+        ctx.translate(v.ox, v.oy);
+        ctx.scale(v.scale, v.scale);
+        ctx.translate(r.x, r.y);
+        ctx.lineWidth = 1 / v.scale;
+        ctx.setLineDash([6 / v.scale, 4 / v.scale]);
+        ctx.strokeStyle = "#000";
+        ctx.stroke(outline);
+        ctx.strokeStyle = "#fff";
+        ctx.lineDashOffset = 5 / v.scale;
+        ctx.stroke(outline);
+        ctx.restore();
+      } else if (sel.rect) {
         const r = sel.rect;
         ctx.save();
         ctx.setLineDash([6, 4]);
@@ -311,12 +350,22 @@ export default function CanvasStage() {
     ctx.save();
     // Com seleção ativa (e não-flutuante), a pintura fica PRESA nela — o
     // comportamento canônico de editor raster. O balde é a exceção documentada
-    // (o scanline não conhece máscara ainda).
-    const selRect = useSelection.getState().floating ? null : useSelection.getState().rect;
+    // (fecha na F5). Seleção mascarada usa o Path2D de runs cacheado como
+    // clip; se um dia fragmentar a ponto de doer, o plano B da análise é
+    // scratch canvas + destination-in.
+    const selState = useSelection.getState();
+    const selRect = selState.floating ? null : selState.rect;
     if (selRect) {
-      ctx.beginPath();
-      ctx.rect(selRect.x, selRect.y, selRect.w, selRect.h);
-      ctx.clip();
+      if (selState.mask) {
+        const { clip } = getMaskPaths(selState.mask, selRect.w, selRect.h);
+        ctx.translate(selRect.x, selRect.y);
+        ctx.clip(clip);
+        ctx.translate(-selRect.x, -selRect.y);
+      } else {
+        ctx.beginPath();
+        ctx.rect(selRect.x, selRect.y, selRect.w, selRect.h);
+        ctx.clip();
+      }
     }
     if (st.tool === "eraser") {
       ctx.globalCompositeOperation = "destination-out";
@@ -389,14 +438,50 @@ export default function CanvasStage() {
       return;
     }
 
+    if (tools.tool === "wand") {
+      // Varinha amostra o COMPOSTO (sample-merged), como o conta-gotas: a
+      // seleção é "o que o olho vê", não a camada ativa — decisão documentada
+      // (é também o que destrava o balde sample-merged de brinde na F5). Por
+      // isso ela nem exige camada ativa visível.
+      if (p.x < 0 || p.y < 0 || p.x >= s.width || p.y >= s.height) return;
+      const flat = document.createElement("canvas");
+      flat.width = s.width;
+      flat.height = s.height;
+      const fctx = flat.getContext("2d", { willReadFrequently: true })!;
+      compositeInto(fctx, s.layers);
+      const img = fctx.getImageData(0, 0, s.width, s.height);
+      const hit = floodFillSelect(img.data, s.width, s.height, p.x, p.y, tools.tolerance);
+      if (!hit) return;
+      const sel = useSelection.getState();
+      if (e.shiftKey && sel.rect && !sel.floating) {
+        // Shift = SOMA à seleção existente (materializa retângulo se preciso).
+        const cur = { bounds: sel.rect, mask: sel.mask ?? rectMask(sel.rect.w, sel.rect.h) };
+        sel.selectMask(unionSel(cur, hit));
+      } else {
+        // selectMask já passa por trimMask — máscara cheia degenera pra rect.
+        sel.selectMask(hit);
+      }
+      return;
+    }
+
     if (tools.tool === "select") {
       const sel = useSelection.getState();
-      const inside =
+      const insideBounds =
         sel.rect &&
         p.x >= sel.rect.x &&
         p.x < sel.rect.x + sel.rect.w &&
         p.y >= sel.rect.y &&
         p.y < sel.rect.y + sel.rect.h;
+      // Seleção mascarada (parada): "dentro" é dentro da MÁSCARA — clicar num
+      // buraco dela começa marquee novo, como nos editores de verdade. Com o
+      // flutuante vivo, o bounds basta (o conteúdo já é só o mascarado).
+      const inside =
+        insideBounds &&
+        (!sel.mask ||
+          sel.floating ||
+          sel.mask[
+            (Math.floor(p.y) - sel.rect!.y) * sel.rect!.w + (Math.floor(p.x) - sel.rect!.x)
+          ] === 1);
       if (inside) {
         // Arrastar o conteúdo: o corte de verdade (lift) só acontece no
         // primeiro MOVE — clicar dentro e soltar não pode cortar nada.

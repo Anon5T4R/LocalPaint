@@ -6,6 +6,7 @@ import type { Rgba } from "../lib/color";
 
 export type Tool =
   | "select"
+  | "wand"
   | "text"
   | "pencil"
   | "brush"

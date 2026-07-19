@@ -138,6 +138,13 @@ export default function App() {
 
       if (e.ctrlKey || e.metaKey) {
         const k = e.key.toLowerCase();
+        // Antes do bloco sem-shift: Ctrl+Shift+I = inverter seleção (padrão
+        // Photoshop). Não colide — Ctrl+I sozinho segue livre.
+        if (k === "i" && e.shiftKey) {
+          e.preventDefault();
+          useSelection.getState().invert();
+          return;
+        }
         if (k === "a") {
           e.preventDefault();
           useSelection.getState().selectAll();
@@ -172,6 +179,7 @@ export default function App() {
       const tools = useTools.getState();
       const map: Record<string, () => void> = {
         m: () => tools.setTool("select"),
+        w: () => tools.setTool("wand"),
         t: () => tools.setTool("text"),
         p: () => tools.setTool("pencil"),
         b: () => tools.setTool("brush"),
@@ -244,6 +252,13 @@ export default function App() {
           </button>
           <button disabled={!open} title={t("zoom.hundred")} onClick={() => requestZoom("100")}>
             1:1
+          </button>
+          <button
+            disabled={!selRect || selFloating}
+            title={t("sel.invert")}
+            onClick={() => useSelection.getState().invert()}
+          >
+            <Icon name="invert" />
           </button>
           <button
             disabled={!selRect || selFloating}

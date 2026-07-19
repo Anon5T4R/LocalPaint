@@ -2,8 +2,9 @@ import Icon, { type IconName } from "./Icon";
 import { t } from "../lib/i18n";
 import { useTools, type Tool } from "../state/tools";
 
-const TOOLS: { tool: Tool; icon: IconName; key: "tool.select" | "tool.text" | "tool.pencil" | "tool.brush" | "tool.eraser" | "tool.fill" | "tool.eyedropper" | "tool.line" | "tool.rect" | "tool.ellipse" }[] = [
+const TOOLS: { tool: Tool; icon: IconName; key: "tool.select" | "tool.wand" | "tool.text" | "tool.pencil" | "tool.brush" | "tool.eraser" | "tool.fill" | "tool.eyedropper" | "tool.line" | "tool.rect" | "tool.ellipse" }[] = [
   { tool: "select", icon: "select", key: "tool.select" },
+  { tool: "wand", icon: "wand", key: "tool.wand" },
   { tool: "text", icon: "text", key: "tool.text" },
   { tool: "pencil", icon: "pencil", key: "tool.pencil" },
   { tool: "brush", icon: "brush", key: "tool.brush" },
@@ -26,7 +27,8 @@ export default function Toolbar() {
   const shapeMode = useTools((s) => s.shapeMode);
   const setShapeMode = useTools((s) => s.setShapeMode);
 
-  const showsSize = tool !== "fill" && tool !== "eyedropper" && tool !== "select" && tool !== "text";
+  const showsSize =
+    tool !== "fill" && tool !== "eyedropper" && tool !== "select" && tool !== "wand" && tool !== "text";
   const isShape = tool === "line" || tool === "rect" || tool === "ellipse";
 
   return (
@@ -58,7 +60,7 @@ export default function Toolbar() {
         </label>
       )}
 
-      {tool === "fill" && (
+      {(tool === "fill" || tool === "wand") && (
         <label className="tool-param">
           <span>{t("tool.tolerance")}</span>
           <input

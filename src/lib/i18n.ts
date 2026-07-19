@@ -31,6 +31,8 @@ const pt = {
   "empty.open": "Abrir imagem",
 
   "tool.select": "Selecionar (M)",
+  "tool.wand": "Varinha mágica (W)",
+  "sel.invert": "Inverter seleção (Ctrl+Shift+I)",
   "tool.text": "Texto (T)",
   "text.title": "Inserir texto",
   "text.placeholder": "Escreva aqui…",
@@ -180,6 +182,8 @@ const en: Record<MessageKey, string> = {
   "empty.open": "Open image",
 
   "tool.select": "Select (M)",
+  "tool.wand": "Magic wand (W)",
+  "sel.invert": "Invert selection (Ctrl+Shift+I)",
   "tool.text": "Text (T)",
   "text.title": "Insert text",
   "text.placeholder": "Type here…",
@@ -327,6 +331,8 @@ const es: Record<MessageKey, string> = {
   "empty.open": "Abrir imagen",
 
   "tool.select": "Seleccionar (M)",
+  "tool.wand": "Varita mágica (W)",
+  "sel.invert": "Invertir selección (Ctrl+Shift+I)",
   "tool.text": "Texto (T)",
   "text.title": "Insertar texto",
   "text.placeholder": "Escribe aquí…",
