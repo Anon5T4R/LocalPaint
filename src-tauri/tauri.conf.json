@@ -36,6 +36,11 @@
         "installerIcon": "icons/icon.ico"
       }
     },
+    "linux": {
+      "deb": {
+        "desktopTemplate": "desktop-entry.desktop"
+      }
+    },
     "fileAssociations": [
       {
         "ext": ["tpaint"],
