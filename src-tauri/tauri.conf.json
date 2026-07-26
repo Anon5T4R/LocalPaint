@@ -41,7 +41,8 @@
         "ext": ["tpaint"],
         "name": "LocalPaint",
         "description": "Documento do LocalPaint",
-        "role": "Editor"
+        "role": "Editor",
+        "mimeType": "application/x-taylor-tpaint"
       }
     ],
     "icon": [
