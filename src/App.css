@@ -20,6 +20,8 @@
   --shadow: 0 10px 30px rgba(20, 40, 90, 0.12);
   --radius: 12px;
   --stage-bg: #d4d6dc;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: light;
 }
 
 :root[data-theme="dark"] {
@@ -40,6 +42,8 @@
   --warn-border: #7c5017;
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   --stage-bg: #12151b;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: dark;
 }
 
 /* ---- Temas nomeados (paletas fixas da suíte) ---- */
@@ -63,6 +67,8 @@
   --shadow: 0 10px 30px rgba(60, 80, 50, 0.14);
   --radius: 12px;
   --stage-bg: #dde3d6;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: light;
 }
 :root[data-theme="darkblue"] {
   --bg: #16202e;
@@ -84,6 +90,8 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
   --radius: 12px;
   --stage-bg: #101823;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: dark;
 }
 :root[data-theme="calmgreen"] {
   --bg: #eaf0e9;
@@ -105,6 +113,8 @@
   --shadow: 0 10px 30px rgba(40, 70, 50, 0.14);
   --radius: 12px;
   --stage-bg: #d9e2d6;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: light;
 }
 :root[data-theme="pastelpink"] {
   --bg: #f8ebf0;
@@ -126,6 +136,8 @@
   --shadow: 0 10px 30px rgba(120, 60, 90, 0.14);
   --radius: 12px;
   --stage-bg: #eed9e2;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: light;
 }
 :root[data-theme="punkprincess"] {
   --bg: #1c1228;
@@ -147,6 +159,8 @@
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
   --radius: 12px;
   --stage-bg: #140b1e;
+  /* <select> no Linux: sem isto o GTK pinta o texto com a cor dele. */
+  color-scheme: dark;
 }
 
 /* Cor de TEXTO do accent (4.5:1; o accent cru é tinta de pintar, não de ler). */
